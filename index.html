@@ -1,9 +1,9 @@
 <!--
   ============================================================
-  @file        : KYF_SHARE_beta1.5.0.17.html
+  @file        : KYF_SHARE_beta1.5.0.25
   @application : Keep Your Folio (KYF)
   @description : Dashboard de suivi de portefeuille financier
-  @version     : Beta 1.5.0.17
+  @version     : Beta 1.5.0.25
   @author      : Keep Your Folio
   @copyright   : © 2026 Keep Your Folio (KYF). Tous droits réservés.
   @license     : Proprietary — Toute reproduction, distribution ou
@@ -10157,9 +10157,9 @@ async function yahoo2Url(path){
 }
 
 function coingeckoUrl(path){
-  // En mode local (file://) → direct CoinGecko
-  // En mode hosted → proxy Netlify si disponible
-  if(KYF_ENV === 'hosted' && _proxyOk)
+  // GitHub Pages n'a pas de proxy → direct CoinGecko
+  // Netlify → proxy si disponible
+  if(KYF_ENV === 'hosted' && _proxyOk === true)
     return '/api/coingecko/' + path;
   return 'https://api.coingecko.com/api/v3/' + path;
 }
@@ -10605,6 +10605,9 @@ document.addEventListener('visibilitychange', ()=>{
 
 // ── Sélecteur indices ─────────────────────────────────────────
 function openIndicesSelector(){
+  const ip = document.getElementById('infoPanel');
+  const io = document.getElementById('infoOverlay');
+  if(ip && ip.style.display !== 'none'){ ip.style.display='none'; if(io) io.style.display='none'; }
   const modal = document.getElementById('indicesSelectorModal');
   const list  = document.getElementById('indicesSelectorList');
   if(!modal || !list) return;
@@ -10643,8 +10646,8 @@ function toggleIndiceCheck(labelEl, name){
     return;
   }
   // Mettre à jour le style
-  labelEl.style.border = isChecked ? '1px solid var(--accent)' : '1px solid var(--border2)';
-  labelEl.style.background = isChecked ? 'rgba(240,180,41,0.08)' : 'rgba(255,255,255,0.03)';
+  labelEl.style.border = cb.checked ? '1px solid var(--accent)' : '1px solid var(--border2)';
+  labelEl.style.background = cb.checked ? 'rgba(240,180,41,0.08)' : 'rgba(255,255,255,0.03)';
 }
 
 function saveIndicesSelection(){
@@ -13225,7 +13228,7 @@ document.addEventListener('DOMContentLoaded', function(){
   <!-- Version actuelle -->
   <div style="background:linear-gradient(135deg,rgba(0,21,255,0.35) 0%,rgba(255,255,255,0.08) 50%,rgba(255,0,0,0.35) 100%);border-radius:8px;padding:10px 12px;margin-bottom:14px;outline:2px solid rgba(0,21,255,0.5)">
     <div style="display:flex;align-items:center;justify-content:space-between">
-      <span id="versionBadge" style="font-size:16px;font-weight:700;color:var(--text-hi)">Beta 1.5.0.20</span>
+      <span id="versionBadge" style="font-size:16px;font-weight:700;color:var(--text-hi)">Beta 1.5.0.25</span>
       <span style="font-size:10px;color:var(--text3)">31/05/2026</span>
     </div>
     <div style="font-size:10px;color:var(--text3);margin-top:6px;line-height:1.7">
@@ -13402,92 +13405,10 @@ document.addEventListener('DOMContentLoaded', function(){
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════ -->
-<!-- MODAL AJOUT POSITION CRYPTO                                 -->
-<!-- ═══════════════════════════════════════════════════════════ -->
-<div id="addCryptoModal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-  width:min(420px,94vw);z-index:9994;background:var(--bg2);
-  border:1px solid var(--border2);border-radius:16px;padding:22px;
-  font-family:'IBM Plex Mono',monospace;box-shadow:0 12px 48px rgba(0,0,0,0.4)">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-    <span style="font-size:13px;font-weight:700;color:var(--text);letter-spacing:.5px">₿ AJOUTER UNE CRYPTO</span>
-    <button onclick="closeAddCryptoPosition()" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:2px 6px">✕</button>
-  </div>
 
-  <!-- Recherche CoinGecko -->
-  <div style="margin-bottom:12px">
-    <div style="font-size:9px;color:var(--text3);letter-spacing:.5px;margin-bottom:6px">CRYPTO</div>
-    <div style="position:relative">
-      <input id="addCryptoSearchInput" type="text" placeholder="Rechercher Bitcoin, Ethereum..."
-        style="width:100%;box-sizing:border-box;font-family:'IBM Plex Mono',monospace;font-size:11px;
-        padding:10px 12px;border-radius:8px;border:1px solid var(--border2);
-        background:rgba(255,255,255,0.07);color:var(--text);outline:none"
-        oninput="addCryptoSearch(this.value)"
-        onfocus="this.style.borderColor='var(--accent)'"
-        onblur="setTimeout(()=>this.style.borderColor='var(--border2)',200)">
-      <div id="addCryptoResults" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;
-        background:var(--bg2);border:1px solid var(--border2);border-radius:8px;margin-top:4px;
-        max-height:180px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.3)"></div>
-      <input id="addCryptoId" type="hidden" value="">
-      <input id="addCryptoName" type="hidden" value="">
-      <input id="addCryptoSymbol" type="hidden" value="">
-    </div>
-  </div>
-
-  <!-- PRU -->
-  <div style="margin-bottom:12px">
-    <div style="font-size:9px;color:var(--text3);letter-spacing:.5px;margin-bottom:6px">PRU (€ ou $)</div>
-    <input id="addCryptoPRU" type="number" placeholder="ex: 67000 (€ ou $)" min="0" step="any"
-      style="width:100%;box-sizing:border-box;font-family:'IBM Plex Mono',monospace;font-size:11px;
-      padding:10px 12px;border-radius:8px;border:1px solid var(--border2);
-      background:rgba(255,255,255,0.07);color:var(--text);outline:none">
-  </div>
-
-  <!-- QTÉ -->
-  <div style="margin-bottom:18px">
-    <div style="font-size:9px;color:var(--text3);letter-spacing:.5px;margin-bottom:6px">QUANTITÉ</div>
-    <input id="addCryptoQTE" type="number" placeholder="ex: 0.00229" min="0" step="any"
-      style="width:100%;box-sizing:border-box;font-family:'IBM Plex Mono',monospace;font-size:11px;
-      padding:10px 12px;border-radius:8px;border:1px solid var(--border2);
-      background:rgba(255,255,255,0.07);color:var(--text);outline:none">
-  </div>
-
-  <div id="addCryptoError" style="display:none;font-size:10px;color:var(--red);margin-bottom:10px"></div>
-
-  <div style="display:flex;gap:10px">
-    <button onclick="closeAddCryptoPosition()"
-      style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;
-      padding:11px;border-radius:8px;border:1px solid var(--border2);
-      background:rgba(255,255,255,0.07);color:var(--text2);cursor:pointer">
-      ANNULER
-    </button>
-    <button onclick="confirmAddCryptoPosition()"
-      style="flex:2;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;
-      padding:11px;border-radius:8px;border:none;
-      background:var(--accent);color:#000;cursor:pointer">
-      AJOUTER LA POSITION
-    </button>
-  </div>
-</div>
 
 <!-- ═══════════════════════════════════════════════════════════ -->
-<!-- MODAL SÉLECTEUR INDICES                                     -->
-<!-- ═══════════════════════════════════════════════════════════ -->
-<div id="indicesSelectorModal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-  width:min(320px,90vw);z-index:9994;background:var(--bg2);
-  border:1px solid var(--border2);border-radius:14px;padding:20px;
-  font-family:'IBM Plex Mono',monospace;box-shadow:0 12px 48px rgba(0,0,0,0.4)">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-    <span style="font-size:12px;font-weight:700;color:var(--text);letter-spacing:.5px">📊 INDICES À AFFICHER</span>
-    <button onclick="closeIndicesSelector()" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
-  </div>
-  <div style="font-size:10px;color:var(--text3);margin-bottom:12px">Sélectionnez au minimum 1 indice</div>
-  <div id="indicesSelectorList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
-  <button onclick="saveIndicesSelection()"
-    style="width:100%;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;
-    padding:10px;border-radius:8px;border:none;background:var(--accent);color:#000;cursor:pointer">
-    APPLIQUER
-  </button>
-</div>
+
 
 </div><!-- close infoPanel missing div -->
 
@@ -13964,7 +13885,12 @@ async function fetchCryptoPrices(){
 
 // ── Ajout position crypto ─────────────────────────────────────
 function openAddCryptoPosition(){
+  // Fermer infoPanel s'il est ouvert
+  const ip = document.getElementById('infoPanel');
+  const io = document.getElementById('infoOverlay');
+  if(ip && ip.style.display !== 'none'){ ip.style.display='none'; if(io) io.style.display='none'; }
   document.getElementById('addCryptoModal').style.display = 'block';
+  const ov = document.getElementById('addCryptoOverlay'); if(ov) ov.style.display='block';
   document.getElementById('addCryptoSearchInput').value = '';
   document.getElementById('addCryptoResults').style.display = 'none';
   document.getElementById('addCryptoId').value = '';
@@ -13978,6 +13904,7 @@ function openAddCryptoPosition(){
 
 function closeAddCryptoPosition(){
   document.getElementById('addCryptoModal').style.display = 'none';
+  const ov = document.getElementById('addCryptoOverlay'); if(ov) ov.style.display='none';
 }
 
 let _addCryptoTimer = null;
@@ -16520,8 +16447,94 @@ async function activateBeta(){
 }
 </script>
 
-<div id="infoOverlay" onclick="toggleInfoPanel()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:9999">
+<div id="infoOverlay" onclick="toggleInfoPanel()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:9999"></div>
+<!-- MODAL AJOUT POSITION CRYPTO                                 -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="addCryptoModal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:min(420px,94vw);z-index:999995;background:var(--bg2);
+  border:1px solid var(--border2);border-radius:16px;padding:22px;
+  font-family:'IBM Plex Mono',monospace;box-shadow:0 12px 48px rgba(0,0,0,0.4)">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+    <span style="font-size:13px;font-weight:700;color:var(--text);letter-spacing:.5px">₿ AJOUTER UNE CRYPTO</span>
+    <button onclick="closeAddCryptoPosition()" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:2px 6px">✕</button>
+  </div>
 
+  <!-- Recherche CoinGecko -->
+  <div style="margin-bottom:12px">
+    <div style="font-size:9px;color:var(--text3);letter-spacing:.5px;margin-bottom:6px">CRYPTO</div>
+    <div style="position:relative">
+      <input id="addCryptoSearchInput" type="text" placeholder="Rechercher Bitcoin, Ethereum..."
+        style="width:100%;box-sizing:border-box;font-family:'IBM Plex Mono',monospace;font-size:11px;
+        padding:10px 12px;border-radius:8px;border:1px solid var(--border2);
+        background:rgba(255,255,255,0.07);color:var(--text);outline:none"
+        oninput="addCryptoSearch(this.value)"
+        onfocus="this.style.borderColor='var(--accent)'"
+        onblur="setTimeout(()=>this.style.borderColor='var(--border2)',200)">
+      <div id="addCryptoResults" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;
+        background:var(--bg2);border:1px solid var(--border2);border-radius:8px;margin-top:4px;
+        max-height:180px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,0.3)"></div>
+      <input id="addCryptoId" type="hidden" value="">
+      <input id="addCryptoName" type="hidden" value="">
+      <input id="addCryptoSymbol" type="hidden" value="">
+    </div>
+  </div>
+
+  <!-- PRU -->
+  <div style="margin-bottom:12px">
+    <div style="font-size:9px;color:var(--text3);letter-spacing:.5px;margin-bottom:6px">PRU (€ ou $)</div>
+    <input id="addCryptoPRU" type="number" placeholder="ex: 67000 (€ ou $)" min="0" step="any"
+      style="width:100%;box-sizing:border-box;font-family:'IBM Plex Mono',monospace;font-size:11px;
+      padding:10px 12px;border-radius:8px;border:1px solid var(--border2);
+      background:rgba(255,255,255,0.07);color:var(--text);outline:none">
+  </div>
+
+  <!-- QTÉ -->
+  <div style="margin-bottom:18px">
+    <div style="font-size:9px;color:var(--text3);letter-spacing:.5px;margin-bottom:6px">QUANTITÉ</div>
+    <input id="addCryptoQTE" type="number" placeholder="ex: 0.00229" min="0" step="any"
+      style="width:100%;box-sizing:border-box;font-family:'IBM Plex Mono',monospace;font-size:11px;
+      padding:10px 12px;border-radius:8px;border:1px solid var(--border2);
+      background:rgba(255,255,255,0.07);color:var(--text);outline:none">
+  </div>
+
+  <div id="addCryptoError" style="display:none;font-size:10px;color:var(--red);margin-bottom:10px"></div>
+
+  <div style="display:flex;gap:10px">
+    <button onclick="closeAddCryptoPosition()"
+      style="flex:1;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;
+      padding:11px;border-radius:8px;border:1px solid var(--border2);
+      background:rgba(255,255,255,0.07);color:var(--text2);cursor:pointer">
+      ANNULER
+    </button>
+    <button onclick="confirmAddCryptoPosition()"
+      style="flex:2;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;
+      padding:11px;border-radius:8px;border:none;
+      background:var(--accent);color:#000;cursor:pointer">
+      AJOUTER LA POSITION
+    </button>
+  </div>
+</div>
+<!-- MODAL SÉLECTEUR INDICES                                     -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div id="indicesSelectorModal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:min(320px,90vw);z-index:999995;background:var(--bg2);
+  border:1px solid var(--border2);border-radius:14px;padding:20px;
+  font-family:'IBM Plex Mono',monospace;box-shadow:0 12px 48px rgba(0,0,0,0.4)">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <span style="font-size:12px;font-weight:700;color:var(--text);letter-spacing:.5px">📊 INDICES À AFFICHER</span>
+    <button onclick="closeIndicesSelector()" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer">✕</button>
+  </div>
+  <div style="font-size:10px;color:var(--text3);margin-bottom:12px">Sélectionnez au minimum 1 indice</div>
+  <div id="indicesSelectorList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
+  <button onclick="saveIndicesSelection()"
+    style="width:100%;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;
+    padding:10px;border-radius:8px;border:none;background:var(--accent);color:#000;cursor:pointer">
+    APPLIQUER
+  </button>
+</div>
+
+
+<div id="addCryptoOverlay" onclick="closeAddCryptoPosition()" style="display:none;position:fixed;inset:0;z-index:999994;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)">
 </body>
 </html
       <div class="ed-section">⚡ API AVANCÉE — MODE 3 DCA</div>
