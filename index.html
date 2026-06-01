@@ -1,9 +1,9 @@
 <!--
   ============================================================
-  @file        : KYF_SHARE_beta1.5.0.25
+  @file        : KYF_SHARE_beta1.5.0.32.html
   @application : Keep Your Folio (KYF)
   @description : Dashboard de suivi de portefeuille financier
-  @version     : Beta 1.5.0.25
+  @version     : Beta 1.5.0.32
   @author      : Keep Your Folio
   @copyright   : © 2026 Keep Your Folio (KYF). Tous droits réservés.
   @license     : Proprietary — Toute reproduction, distribution ou
@@ -1768,12 +1768,13 @@ body {
       </svg>
       <span id="sheetsBtnDot" style="display:none;position:absolute;top:-3px;right:-3px;width:6px;height:6px;border-radius:50%;background:var(--green);border:1.5px solid var(--topbar-bg)"></span>
     </button>
-    <button class="icon-btn" id="infoBtn" onclick="toggleInfoPanel()" title="Informations">
+    <button class="icon-btn" id="infoBtn" onclick="toggleInfoPanel()" title="Informations" style="position:relative">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="10"/>
         <line x1="12" y1="8" x2="12" y2="8"/>
         <line x1="12" y1="12" x2="12" y2="16"/>
       </svg>
+      <span id="infoBugDot" style="display:none;position:absolute;top:-2px;right:-2px;width:7px;height:7px;border-radius:50%;background:#ff9f43;border:1.5px solid var(--topbar-bg)"></span>
     </button>
     <button class="icon-btn" id="heartBtn" onclick="toggleHeartPanel()" title="Feedback &amp; Soutien">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
@@ -8694,14 +8695,23 @@ let unreadCount = 0;
 
 function addLog(type, msg, source){
   if(!LOGS_ENABLED && type === 'infos' && source !== 'io') return; // infos silencieuses sauf I/O
+  // Ignorer les warnings de timeout réseau — ils se résolvent au prochain refresh auto
+  if(type === 'warnings' && msg && (msg.includes('timed out') || msg.includes('signal') || msg.includes('AbortError'))) return;
   const entry = {
-    ts: new Date().toLocaleTimeString('fr-FR'),
-    msg: String(msg),
+    ts:     new Date().toLocaleTimeString('fr-FR'),
+    msg:    String(msg),
     source: source || '',
+    expiry: Date.now() + 5 * 60 * 1000, // expire après 5 min
   };
   logs[type].push(entry);
   updateNotifBadge();
   if(activeNotifTab === type) renderNotifContent();
+  // Auto-purge des warnings expirés toutes les 5 min
+  if(type === 'warnings') setTimeout(() => {
+    logs.warnings = logs.warnings.filter(e => !e.expiry || e.expiry > Date.now());
+    updateNotifBadge();
+    if(activeNotifTab === 'warnings') renderNotifContent();
+  }, 5 * 60 * 1000);
 }
 
 // Efface les erreurs d'une source et ajoute une info éphémère "rétablie"
@@ -8748,6 +8758,14 @@ function updateNotifBadge(){
   });
 }
 
+// Bugs corrigés dans la version actuelle — à mettre à jour à chaque release
+const KYF_BUG_FIXES = [
+  'Modaux Crypto et Indices affichés dans INFORMATIONS',
+  'Bouton + AJOUTER Crypto non fonctionnel',
+  'Bouton CHOISIR LES INDICES non fonctionnel',
+  'Codes beta invalides avec caractères invisibles (copier-coller)',
+];
+
 function toggleInfoPanel(){
   const panel   = document.getElementById('infoPanel');
   const overlay = document.getElementById('infoOverlay');
@@ -8756,6 +8774,20 @@ function toggleInfoPanel(){
   panel.style.display   = isOpen ? 'none' : 'block';
   overlay.style.display = isOpen ? 'none' : 'block';
   if(!isOpen){
+    // Masquer la pastille et mémoriser le hash vu
+    const dot = document.getElementById('infoBugDot');
+    if(dot) dot.style.display = 'none';
+    if(typeof KYF_BUG_FIXES !== 'undefined' && KYF_BUG_FIXES.length)
+      localStorage.setItem('kyf-bugfix-seen', KYF_BUG_FIXES.join('|'));
+    // Afficher le bandeau bugs si des corrections existent
+    const banner = document.getElementById('infoBugBanner');
+    const list   = document.getElementById('infoBugList');
+    if(banner && list && KYF_BUG_FIXES && KYF_BUG_FIXES.length > 0){
+      list.innerHTML = KYF_BUG_FIXES.map(b => '· ' + b).join('<br>');
+      banner.style.display = 'block';
+    } else if(banner){
+      banner.style.display = 'none';
+    }
   }
 }
 
@@ -10538,6 +10570,14 @@ function hideCatchupBanner() {
 
 fetchAllPrices();
 updateSheetsIndicator();
+// Pastille bug fixes sur bouton ⓘ
+(function(){
+  const dot = document.getElementById('infoBugDot');
+  if(!dot || typeof KYF_BUG_FIXES === 'undefined' || !KYF_BUG_FIXES.length) return;
+  const hash = KYF_BUG_FIXES.join('|');
+  const seen = localStorage.getItem('kyf-bugfix-seen');
+  if(seen !== hash) dot.style.display = 'block';
+})();
 // Intraday : déclenché après un délai pour laisser fetchAllPrices se terminer
 setTimeout(()=>{ try{ fetchIntraday(); }catch(e){} }, 3000);
 // Charger les alertes depuis le localStorage au démarrage
@@ -11991,10 +12031,10 @@ function renderTransactions(){
     <div id="edTab-api" class="ed-tab-content" style="display:none">
       <div class="ed-section">⚡ GOOGLE SHEETS — PERSISTANCE INTRADAY</div>
       <div style="background:rgba(255,159,67,0.08);border:1px solid rgba(255,159,67,0.3);border-radius:8px;padding:10px 12px;margin-bottom:10px">
-        <div style="font-size:10px;font-weight:700;color:#ff9f43;margin-bottom:3px">🚧 BÊTA 2 — Prochainement</div>
-        <div style="font-size:10px;color:var(--text3);line-height:1.8">Cette fonctionnalité sera disponible dans la Beta 2 avec une installation simplifiée en un clic.</div>
+        <div style="font-size:11px;font-weight:700;color:#ff9f43;margin-bottom:4px">🚧 BÊTA 2 — Prochainement</div>
+        <div style="font-size:11px;color:var(--text3);line-height:1.8">Cette fonctionnalité sera disponible dans la Beta 2 avec une installation simplifiée en un clic.</div>
       </div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:10px;line-height:1.8;opacity:.5">URL de votre déploiement GAS add-on pour la persistance intraday.</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.8;opacity:.5">URL de votre déploiement GAS add-on pour la persistance intraday.</div>
       <input id="sheetsUrlInput" type="text" placeholder="https://script.google.com/macros/s/..." disabled
         style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.03);border:1px solid var(--border2);
         border-radius:8px;padding:8px 10px;font-family:'IBM Plex Mono',monospace;font-size:10px;
@@ -13225,10 +13265,16 @@ document.addEventListener('DOMContentLoaded', function(){
     <button onclick="toggleInfoPanel()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;line-height:1;padding:0">✕</button>
   </div>
 
+  <!-- Bandeau bugs corrigés -->
+  <div id="infoBugBanner" style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.3);border-radius:8px;padding:10px 12px;margin-bottom:14px;display:none">
+    <div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:4px;letter-spacing:.5px">🔧 BUGS CORRIGÉS DANS CETTE VERSION</div>
+    <div id="infoBugList" style="font-size:10px;color:var(--text2);line-height:1.9"></div>
+  </div>
+
   <!-- Version actuelle -->
   <div style="background:linear-gradient(135deg,rgba(0,21,255,0.35) 0%,rgba(255,255,255,0.08) 50%,rgba(255,0,0,0.35) 100%);border-radius:8px;padding:10px 12px;margin-bottom:14px;outline:2px solid rgba(0,21,255,0.5)">
     <div style="display:flex;align-items:center;justify-content:space-between">
-      <span id="versionBadge" style="font-size:16px;font-weight:700;color:var(--text-hi)">Beta 1.5.0.25</span>
+      <span id="versionBadge" style="font-size:16px;font-weight:700;color:var(--text-hi)">Beta 1.5.0.32</span>
       <span style="font-size:10px;color:var(--text3)">31/05/2026</span>
     </div>
     <div style="font-size:10px;color:var(--text3);margin-top:6px;line-height:1.7">
@@ -13353,6 +13399,18 @@ document.addEventListener('DOMContentLoaded', function(){
       style="display:none;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text3);
       line-height:1.9;max-height:320px;overflow-y:auto;padding-right:6px;
       scrollbar-width:thin;scrollbar-color:var(--border2) transparent">
+
+
+<div style="margin-bottom:12px">
+  <div style="color:var(--accent);font-weight:700;font-size:11px;letter-spacing:.3px;margin-bottom:3px;padding-bottom:3px;border-bottom:1px solid var(--border)">&#9656; Beta 1.5.0.28 &mdash; 01/06/2026</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Pastille orange sur &#9432; quand des bugs ont &eacute;t&eacute; corrig&eacute;s</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Bandeau vert dans INFORMATIONS avec liste des bugs corrig&eacute;s</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Fix CRITIQUE : modaux Crypto et Indices s&apos;ouvraient dans INFORMATIONS</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Fix codes beta : caract&egrave;res invisibles supprim&eacute;s (copier-coller WhatsApp)</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Migration Netlify &rarr; GitHub Pages (keepyourfolio.github.io/kyf-beta)</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Email automatique &agrave; chaque activation de code beta</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; VERSEMENTS PR&Eacute;VUS : tableau inline avec &eacute;dition, devise &euro;/$/$&pound;/CHF</div>
+</div>
 
 <div style="margin-bottom:12px">
   <div style="color:var(--accent);font-weight:700;font-size:11px;letter-spacing:.3px;margin-bottom:3px;padding-bottom:3px;border-bottom:1px solid var(--border)">&#9656; Beta 1.5.0.00 &mdash; 31/05/2026</div>
@@ -15038,6 +15096,16 @@ function switchCryptoTab(tab){
     <button onclick="document.getElementById('aboutPanel').style.display='block';document.getElementById('aboutOverlay').style.display='block'" style="background:none;border:none;color:var(--text3);cursor:pointer;font-family:'IBM Plex Mono',monospace;font-size:10px;text-decoration:underline;padding:0">À propos</button>
     <span style="margin:0 8px;opacity:0.3">·</span>
     <a href="https://ko-fi.com/keepyourfolio" target="_blank" style="color:var(--text3);text-decoration:underline;font-size:10px">Soutenir le projet</a>
+  </div>
+  <div style="margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap">
+    <a href="https://x.com/keepYourFolio" target="_blank" style="color:var(--text3);text-decoration:none;font-size:10px;display:flex;align-items:center;gap:4px;transition:color .2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text3)'">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.253 5.622 5.912-5.622Zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+      @keepYourFolio
+    </a>
+    <span style="opacity:0.3">·</span>
+    <a href="mailto:keep.your.folio@gmail.com" style="color:var(--text3);text-decoration:none;font-size:10px;transition:color .2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text3)'">keep.your.folio@gmail.com</a>
+    <span style="opacity:0.3">·</span>
+    <a href="https://forms.gle/7XWBa5TzMpnAK3QM8" target="_blank" style="color:var(--text3);text-decoration:none;font-size:10px;transition:color .2s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text3)'">Feedback &amp; Beta →</a>
   </div>
   <div style="font-size:9px;color:var(--text3);opacity:0.6;max-width:600px;margin:0 auto;line-height:1.8">
     Les logos et marques affichés sont la propriété de leurs détenteurs respectifs. ChatGPT/OpenAI · Gemini/Google · Claude/Anthropic. KYF n'est affilié à aucune de ces sociétés.
