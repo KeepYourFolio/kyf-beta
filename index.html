@@ -15,6 +15,7 @@
 <html lang="fr" data-theme="dark">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" type="image/png" href="image.png">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -13153,7 +13154,10 @@ function resetModule(module){
 
 function resetAll(){
   if(!confirm('⚠️ TOUT EFFACER — Toutes vos données KYF seront supprimées (positions, transactions, crypto, historique, préférences). Cette action est irréversible.')) return;
-  const keys = Object.keys(localStorage).filter(k => k.startsWith('pea-') || k.startsWith('kyf-') || k.startsWith('cg-'));
+  const keys = Object.keys(localStorage).filter(k => 
+    (k.startsWith('pea-') || k.startsWith('kyf-') || k.startsWith('cg-')) &&
+    k !== 'kyf-beta-unlocked' && k !== 'kyf-sheets-url' && k !== 'kyf-bugfix-seen'
+  );
   keys.forEach(k => localStorage.removeItem(k));
   alert('Données effacées. Rechargement...');
   location.reload();
@@ -13281,7 +13285,7 @@ document.addEventListener('DOMContentLoaded', function(){
   <!-- Version actuelle -->
   <div style="background:linear-gradient(135deg,rgba(0,21,255,0.35) 0%,rgba(255,255,255,0.08) 50%,rgba(255,0,0,0.35) 100%);border-radius:8px;padding:10px 12px;margin-bottom:14px;outline:2px solid rgba(0,21,255,0.5)">
     <div style="display:flex;align-items:center;justify-content:space-between">
-      <span id="versionBadge" style="font-size:16px;font-weight:700;color:var(--text-hi)">Beta 1.5.0.40</span>
+      <span id="versionBadge" style="font-size:16px;font-weight:700;color:var(--text-hi)">Beta 1.5.0.42</span>
       <span style="font-size:10px;color:var(--text3)">31/05/2026</span>
     </div>
     <div style="font-size:10px;color:var(--text3);margin-top:6px;line-height:1.7">
