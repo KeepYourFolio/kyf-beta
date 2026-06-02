@@ -1,9 +1,9 @@
 <!--
   ============================================================
-  @file        : KYF_SHARE_beta1.5.0.51.html
+  @file        : KYF_SHARE_beta1.5.0.50.html
   @application : Keep Your Folio (KYF)
   @description : Dashboard de suivi de portefeuille financier
-  @version     : Beta 1.5.0.51
+  @version     : Beta 1.5.0.50
   @author      : Keep Your Folio
   @copyright   : © 2026 Keep Your Folio (KYF). Tous droits réservés.
   @license     : Proprietary — Toute reproduction, distribution ou
@@ -13316,7 +13316,7 @@ document.addEventListener('DOMContentLoaded', function(){
   <!-- Version actuelle -->
   <div style="background:linear-gradient(135deg,rgba(0,21,255,0.35) 0%,rgba(255,255,255,0.08) 50%,rgba(255,0,0,0.35) 100%);border-radius:8px;padding:10px 12px;margin-bottom:14px;outline:2px solid rgba(0,21,255,0.5)">
     <div style="display:flex;align-items:center;justify-content:space-between">
-      <span id="versionBadge" style="font-size:16px;font-weight:700;color:var(--text-hi)">Beta 1.5.0.51</span>
+      <span id="versionBadge" style="font-size:16px;font-weight:700;color:var(--text-hi)">Beta 1.5.0.53</span>
       <span style="font-size:10px;color:var(--text3)">31/05/2026</span>
     </div>
     <div style="font-size:10px;color:var(--text3);margin-top:6px;line-height:1.7">
@@ -14019,6 +14019,8 @@ async function fetchCryptoPrices(){
   window._cryptoLoaded = true;
   tryDailySnapshot();
   try { if(typeof currentPage !== 'undefined' && currentPage === 'heatmap') renderHeatmap(); } catch(e){}
+  // Si on est sur la page crypto, re-render après chargement CoinGecko
+  try { if(typeof currentPage !== 'undefined' && currentPage === 'crypto') { initCryptoPage(); } } catch(e){}
 }
 
 // ── Rendu complet ─────────────────────────────────────────────────
@@ -14293,7 +14295,7 @@ function renderCryptoIntradayChart(){
         if(!chartArea) return 'transparent';
         const g=c.createLinearGradient(0,chartArea.top,0,chartArea.bottom);
         if(isPos){ g.addColorStop(0,'rgba(0,212,170,0.35)'); g.addColorStop(0.6,'rgba(0,212,170,0.08)'); g.addColorStop(1,'rgba(0,212,170,0.00)'); }
-        else      { g.addColorStop(0,'rgba(255,69,96,0.35)');  g.addColorStop(0.6,'rgba(255,69,96,0.08)');  g.addColorStop(1,'rgba(255,69,96,0.00)'); }
+        else      { g.addColorStop(0,'rgba(255,69,96,0.00)');  g.addColorStop(0.4,'rgba(255,69,96,0.08)');  g.addColorStop(1,'rgba(255,69,96,0.35)'); }
         return g;
       },
       tension: 0.3,
