@@ -13152,7 +13152,11 @@ function resetModule(module){
 }
 
 function resetAll(){
-  showResetWarn('all', 'TOUT EFFACER');
+  if(!confirm('⚠️ TOUT EFFACER — Toutes vos données KYF seront supprimées (positions, transactions, crypto, historique, préférences). Cette action est irréversible.')) return;
+  const keys = Object.keys(localStorage).filter(k => k.startsWith('pea-') || k.startsWith('kyf-') || k.startsWith('cg-'));
+  keys.forEach(k => localStorage.removeItem(k));
+  alert('Données effacées. Rechargement...');
+  location.reload();
 }
 
 function resetModule_legacy(module){
@@ -13277,7 +13281,7 @@ document.addEventListener('DOMContentLoaded', function(){
   <!-- Version actuelle -->
   <div style="background:linear-gradient(135deg,rgba(0,21,255,0.35) 0%,rgba(255,255,255,0.08) 50%,rgba(255,0,0,0.35) 100%);border-radius:8px;padding:10px 12px;margin-bottom:14px;outline:2px solid rgba(0,21,255,0.5)">
     <div style="display:flex;align-items:center;justify-content:space-between">
-      <span id="versionBadge" style="font-size:16px;font-weight:700;color:var(--text-hi)">Beta 1.5.0.36</span>
+      <span id="versionBadge" style="font-size:16px;font-weight:700;color:var(--text-hi)">Beta 1.5.0.40</span>
       <span style="font-size:10px;color:var(--text3)">31/05/2026</span>
     </div>
     <div style="font-size:10px;color:var(--text3);margin-top:6px;line-height:1.7">
@@ -13300,27 +13304,37 @@ document.addEventListener('DOMContentLoaded', function(){
       <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--text3);margin-bottom:10px;line-height:1.7">
         Données stockées dans votre navigateur.<br>Réinitialisez un module ou tout effacer.
       </div>
+      <div style="background:rgba(255,159,67,0.08);border:1px solid rgba(255,159,67,0.3);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#ff9f43;line-height:1.8">
+        ⚠️ Avant de réinitialiser, pensez à <strong>exporter vos données</strong> via le bouton
+        <svg style="vertical-align:middle;margin:0 2px" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ff9f43" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="5" rx="9" ry="3"/>
+          <path d="M3 5v4c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/>
+          <path d="M3 9v4c0 1.66 4.03 3 9 3s9-1.34 9-3V9"/>
+          <path d="M3 13v4c0 1.66 4.03 3 9 3s9-1.34 9-3v-4"/>
+        </svg>
+        <strong>Import/Export</strong> en haut à droite.
+      </div>
       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:8px;padding:8px 12px">
           <div>
             <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--text2)">CRYPTO</div>
             <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text3)">Positions · opérations · stables · swaps</div>
           </div>
-          <button onclick="resetModule('crypto')" style="background:rgba(255,69,96,0.15);border:1px solid rgba(255,69,96,0.4);color:#ff4560;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;padding:5px 10px;border-radius:6px;cursor:pointer">RESET</button>
+          <button onclick="resetModule_legacy('crypto')" style="background:rgba(255,69,96,0.15);border:1px solid rgba(255,69,96,0.4);color:#ff4560;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;padding:5px 10px;border-radius:6px;cursor:pointer">RESET</button>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:8px;padding:8px 12px">
           <div>
             <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--text2)">PORTEFEUILLE PEA</div>
             <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text3)">ETF · transactions · alertes · historique</div>
           </div>
-          <button onclick="resetModule('pea')" style="background:rgba(255,69,96,0.15);border:1px solid rgba(255,69,96,0.4);color:#ff4560;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;padding:5px 10px;border-radius:6px;cursor:pointer">RESET</button>
+          <button onclick="resetModule_legacy('pea')" style="background:rgba(255,69,96,0.15);border:1px solid rgba(255,69,96,0.4);color:#ff4560;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;padding:5px 10px;border-radius:6px;cursor:pointer">RESET</button>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:8px;padding:8px 12px">
           <div>
             <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;color:var(--text2)">PRÉFÉRENCES UI</div>
             <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text3)">Thème · couleurs · polices · ordre onglets</div>
           </div>
-          <button onclick="resetModule('prefs')" style="background:rgba(255,69,96,0.15);border:1px solid rgba(255,69,96,0.4);color:#ff4560;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;padding:5px 10px;border-radius:6px;cursor:pointer">RESET</button>
+          <button onclick="resetModule_legacy('prefs')" style="background:rgba(255,69,96,0.15);border:1px solid rgba(255,69,96,0.4);color:#ff4560;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;padding:5px 10px;border-radius:6px;cursor:pointer">RESET</button>
         </div>
       </div>
       <button onclick="resetAll()" style="width:100%;background:rgba(255,69,96,0.15);border:1px solid rgba(255,69,96,0.4);color:#ff4560;font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:700;padding:8px;border-radius:6px;cursor:pointer;letter-spacing:1px">
