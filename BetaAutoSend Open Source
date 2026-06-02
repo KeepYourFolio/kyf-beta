@@ -1,0 +1,246 @@
+// ================================================================
+// KYF — Keep Your Folio | BetaAutoSend.gs
+// ================================================================
+// Script open source — envoi automatique des codes Beta
+// via Google Forms + Google Sheets
+//
+// INSTALLATION :
+//   1. Créez un Google Sheets avec un onglet 'BetaCodes 2'
+//      Colonnes : A=Code  B=Statut  C=Date  D=Email
+//   2. Liez votre Google Form à ce Sheets (Réponses → Sheets)
+//   3. Ouvrez le GAS depuis le Sheets (Extensions → Apps Script)
+//   4. Collez ce script et remplissez les constantes ci-dessous
+//   5. Exécutez installTrigger() une seule fois
+//
+// LICENCE : MIT — Libre de réutilisation avec mention de l'auteur
+// AUTEUR  : Keep Your Folio — keep.your.folio@gmail.com
+// SOURCE  : https://github.com/KeepYourFolio/kyf-beta
+// ================================================================
+
+// ================================================================
+// KYF — Envoi automatique des codes Beta 2
+// ================================================================
+
+const BETA2_SHEET = 'BetaCodes 2';
+const NOTIF_EMAIL = 'VOTRE_EMAIL@gmail.com';
+const KYF_SITE    = 'VOTRE_URL_KYF';
+const KYF_X       = 'VOTRE_URL_X';
+
+// ================================================================
+// TRIGGER
+// ================================================================
+function onFormSubmit(e) {
+  try {
+    const responses = e.namedValues;
+
+    // Recherche par inclusion partielle (évite les problèmes de \n\n)
+    const wantsBetaEntry = Object.entries(responses).find(([k]) => k.includes('acc\u00e8s B\u00eata'));
+    const emailEntry     = Object.entries(responses).find(([k]) => k.includes("code d'acc\u00e8s"));
+
+    const wantsBetaVal = wantsBetaEntry ? wantsBetaEntry[1][0].trim().toLowerCase() : '';
+    const betaEmail    = emailEntry     ? emailEntry[1][0].trim()                   : '';
+
+    Logger.log('wantsBeta: ' + wantsBetaVal);
+    Logger.log('betaEmail: ' + betaEmail);
+
+    if (wantsBetaVal !== 'oui') { Logger.log('Pas oui — stop'); return; }
+    if (!betaEmail || !betaEmail.includes('@')) { Logger.log('Pas d\'email — stop'); return; }
+
+    const ss    = SpreadsheetApp.openById('VOTRE_SPREADSHEET_ID');
+    const sheet = ss.getSheetByName(BETA2_SHEET);
+    if (!sheet) { Logger.log('BetaCodes 2 introuvable'); return; }
+
+    const data = sheet.getDataRange().getValues();
+    let codeRow = -1, code = '';
+    for (let i = 1; i < data.length; i++) {
+      if (!(data[i][1] || '').toString().trim()) {
+        codeRow = i + 1;
+        code    = (data[i][0] || '').toString().replace(/[^\x20-\x7E]/g, '').trim();
+        break;
+      }
+    }
+
+    if (!code) {
+      // Notifier admin
+      GmailApp.sendEmail(NOTIF_EMAIL, '[KYF] Plus de codes Beta 2', 'Liste d\'attente : ' + betaEmail);
+      // Mail liste d'attente à l'utilisateur
+      GmailApp.sendEmail(betaEmail, '[KYF] Vous êtes sur liste d\'attente', '', {
+        htmlBody: buildWaitingEmail(betaEmail),
+        name: 'Keep Your Folio',
+        replyTo: NOTIF_EMAIL
+      });
+      return;
+    }
+
+    const date = Utilities.formatDate(new Date(), 'Europe/Paris', 'yyyy-MM-dd HH:mm');
+    sheet.getRange(codeRow, 2).setValue('RÉSERVÉ');
+    sheet.getRange(codeRow, 3).setValue(date);
+    sheet.getRange(codeRow, 4).setValue(betaEmail);
+
+    const htmlBody = buildWelcomeEmail(code, betaEmail);
+    GmailApp.sendEmail(betaEmail, '[KYF Beta 2] Votre code d\'accès', '', {
+      htmlBody: htmlBody,
+      name:     'Keep Your Folio',
+      replyTo:  NOTIF_EMAIL
+    });
+
+    GmailApp.sendEmail(NOTIF_EMAIL,
+      '[KYF Beta 2] Code envoyé : ' + code,
+      'Code : ' + code + '\nEmail : ' + betaEmail + '\nDate : ' + date
+    );
+
+    // Masquer l'email après envoi (RGPD)
+    const masked = betaEmail.replace(/(.{2})(.*)(@.*)/, '$1***$3');
+    sheet.getRange(codeRow, 4).setValue(masked);
+
+    Logger.log('Code ' + code + ' envoyé à ' + betaEmail);
+
+  } catch (err) {
+    Logger.log('Erreur : ' + err);
+    GmailApp.sendEmail(NOTIF_EMAIL, '[KYF] Erreur envoi code', err.toString());
+  }
+}
+
+// ================================================================
+// EMAIL HTML
+// ================================================================
+function buildWelcomeEmail(code, email) {
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:'IBM Plex Mono',monospace">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 0">
+    <tr><td align="center">
+      <table width="480" cellpadding="0" cellspacing="0" style="background:#0d1a30;border:1px solid #1e2d4a;border-radius:16px;overflow:hidden;max-width:90vw">
+        <tr>
+          <td align="center" style="padding:32px 32px 20px">
+            <img src="VOTRE_URL_LOGO"
+                 width="100" alt="KYF"
+                 style="display:block;margin:0 auto 16px;width:100px;height:auto"/>
+            <div style="font-size:10px;color:#4a6080;letter-spacing:3px;margin-bottom:4px">KEEP YOUR FOLIO</div>
+            <table cellpadding="0" cellspacing="0" style="margin:0 auto"><tr>
+              <td width="16" height="2" style="background:#002395"></td>
+              <td width="16" height="2" style="background:#ffffff"></td>
+              <td width="16" height="2" style="background:#ED2939"></td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:0 32px 24px">
+            <div style="font-size:20px;font-weight:700;color:#e0ecff;margin-bottom:8px">Bienvenue dans la Beta 2 !</div>
+            <div style="font-size:13px;color:#5a7090;line-height:1.8">Votre code d'acc&egrave;s est pr&ecirc;t.<br>Rejoignez les premiers testeurs de KYF.</div>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:0 32px 28px">
+            <div style="background:#080f1e;border:2px solid #00d4aa;border-radius:12px;padding:20px 32px;display:inline-block">
+              <div style="font-size:10px;color:#5a7090;letter-spacing:2px;margin-bottom:8px">VOTRE CODE D'ACC&Egrave;S</div>
+              <div style="font-size:22px;font-weight:700;color:#00d4aa;letter-spacing:4px">${code}</div>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:0 32px 28px">
+            <a href="${KYF_SITE}" style="display:inline-block;background:#00d4aa;color:#000;font-weight:700;font-size:12px;letter-spacing:1px;padding:14px 32px;border-radius:10px;text-decoration:none">
+              ACC&Eacute;DER &Agrave; KYF &rarr;
+            </a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 32px;border-top:1px solid #1e2d4a">
+            <div style="font-size:11px;color:#7a90aa;line-height:2.4">
+              &mdash; KYF est optimis&eacute; pour une utilisation sur <strong style="color:#a0b4cc">ordinateur</strong><br>
+              &mdash; Donn&eacute;es 100% locales &mdash; rien n'est envoy&eacute; &agrave; un serveur<br>
+              &mdash; Un bug ? Une suggestion ? R&eacute;pondez &agrave; cet email
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:20px 32px;background:#080f1e;border-radius:0 0 16px 16px">
+            <div style="font-size:10px;color:#2a3e60;margin-bottom:8px">&copy; 2026 Keep Your Folio</div>
+            <a href="${KYF_X}" style="color:#4d9fff;font-size:10px;text-decoration:none">@keepYourFolio</a>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+function buildWaitingEmail(email) {
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f4f6f9;font-family:'IBM Plex Mono',monospace">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:40px 0">
+    <tr><td align="center">
+      <table width="480" cellpadding="0" cellspacing="0" style="background:#0d1a30;border:1px solid #1e2d4a;border-radius:16px;overflow:hidden;max-width:90vw">
+        <tr>
+          <td align="center" style="padding:32px 32px 20px">
+            <img src="VOTRE_URL_LOGO"
+                 width="100" alt="KYF" style="display:block;margin:0 auto 16px;width:100px;height:auto"/>
+            <div style="font-size:11px;color:#4a6080;letter-spacing:3px;margin-bottom:4px">KEEP YOUR FOLIO</div>
+            <table cellpadding="0" cellspacing="0" style="margin:0 auto"><tr>
+              <td width="16" height="2" style="background:#002395"></td>
+              <td width="16" height="2" style="background:#ffffff"></td>
+              <td width="16" height="2" style="background:#ED2939"></td>
+            </tr></table>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:0 32px 24px">
+            <div style="font-size:20px;font-weight:700;color:#e0ecff;margin-bottom:8px">Vous &ecirc;tes sur la liste d'attente !</div>
+            <div style="font-size:13px;color:#5a7090;line-height:1.8">Tous les codes de la Beta actuelle ont &eacute;t&eacute; distribu&eacute;s.<br>Votre demande est bien enregistr&eacute;e.</div>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:0 32px 28px">
+            <div style="background:#080f1e;border:2px solid #ff9f43;border-radius:12px;padding:20px 32px;display:inline-block">
+              <div style="font-size:11px;color:#ff9f43;line-height:1.9;text-align:center">
+                Vous recevrez automatiquement un code<br>d'acc&egrave;s d&egrave;s l'ouverture de la prochaine Beta.
+              </div>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:20px 32px;border-top:1px solid #1e2d4a">
+            <div style="font-size:11px;color:#7a90aa;line-height:2.4">
+              &mdash; Aucune action requise de votre part<br>
+              &mdash; Un bug ? Une suggestion ? R&eacute;pondez &agrave; cet email
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td align="center" style="padding:20px 32px;background:#080f1e;border-radius:0 0 16px 16px">
+            <div style="font-size:10px;color:#2a3e60;margin-bottom:8px">&copy; 2026 Keep Your Folio</div>
+            <a href="${KYF_X}" style="color:#4d9fff;font-size:10px;text-decoration:none">@keepYourFolio</a>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+// ================================================================
+// INSTALLATION — Exécuter UNE FOIS depuis le Sheets réponses
+// ================================================================
+function installTrigger() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === 'onFormSubmit') ScriptApp.deleteTrigger(t);
+  });
+  // Écoute le Sheets actif (Sheets de réponses du Form)
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ScriptApp.newTrigger('onFormSubmit')
+    .forSpreadsheet(ss)
+    .onFormSubmit()
+    .create();
+  Logger.log('Trigger installé sur : ' + ss.getName());
+}
+
+function testAccess() {
+  const ss = SpreadsheetApp.openById('VOTRE_SPREADSHEET_ID');
+  Logger.log('Accès OK : ' + ss.getName());
+}
