@@ -1,9 +1,9 @@
 <!--
   ============================================================
-  @file        : KYF_SHARE_beta1.5.0.34.html
+  @file        : KYF_SHARE_beta1.5.0.51.html
   @application : Keep Your Folio (KYF)
   @description : Dashboard de suivi de portefeuille financier
-  @version     : Beta 1.5.0.34
+  @version     : Beta 1.5.0.51
   @author      : Keep Your Folio
   @copyright   : © 2026 Keep Your Folio (KYF). Tous droits réservés.
   @license     : Proprietary — Toute reproduction, distribution ou
@@ -520,10 +520,10 @@ body {
   border-left-color:var(--blue);
   background:rgba(77,159,255,0.08);
 }
-.al-date{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text3);min-width:65px}
-.al-name{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text);flex:1}
-.al-pct{font-family:'IBM Plex Mono',monospace;font-size:11px;min-width:60px;text-align:right}
-.al-msg{font-size:10px;color:var(--text2);flex:2}
+.al-date{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);min-width:65px}
+.al-name{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text);flex:1}
+.al-pct{font-family:'IBM Plex Mono',monospace;font-size:12px;min-width:60px;text-align:right}
+.al-msg{font-size:11px;color:var(--text2);flex:2}
 
 /* ── SCROLL TABLE ── */
 .tscroll{max-height:600px;overflow-y:auto}
@@ -4269,6 +4269,18 @@ async function fetchAllPrices(force=false){
   try { renderMensuelMiniChart(); } catch(e){}
   try { if(typeof currentPage !== 'undefined' && currentPage === 'heatmap') renderHeatmap(); } catch(e){}
   try { if(typeof currentPage !== 'undefined' && currentPage === 'bilan') renderBilan(); } catch(e){}
+  // Render de la page restaurée après chargement des prix
+  try {
+    if(typeof currentPage !== 'undefined' && currentPage !== 'portfolio'){
+      const _p = currentPage;
+      if(_p === 'alertes')      { try{renderAlertes();}catch(e){} }
+      else if(_p === 'crypto')  { try{initCryptoPage();}catch(e){} }
+      else if(_p === 'transactions') { try{renderTransactions();}catch(e){} }
+      else if(_p === 'historique')   { try{renderHistPage();}catch(e){} }
+      else if(_p === 'dca')          { try{renderDCA(); renderPlanned();}catch(e){} }
+      else if(_p === 'geo')          { try{renderGeo();}catch(e){} }
+    }
+  } catch(e){}
 }
 
 
@@ -4703,6 +4715,7 @@ function initNavDrag(){
 
 function showPage(id,tab){
   currentPage=id;
+  localStorage.setItem('kyf-last-page', id);
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   const pg=document.getElementById('page-'+id); if(pg) pg.classList.add('active');
@@ -5088,21 +5101,15 @@ function renderHistTablePage(){
     // FERMETURE : ligne courante = catchup, ligne suivante = live ou fin
     const showDemarcClose = hasDemarc && catchupDateSet.has(rowDate) && (!nextDate || !catchupDateSet.has(nextDate));
 
-    const row = `<tr><td>${exD(h[0])}</td><td>${fmt(h[1],2)} €</td><td class="${h[3]>=0?'up':'dn'}">${h[3]>=0?'+':''}${fmt(h[3],2)} €</td><td class="${h[2]>=0?'up':'dn'}">${h[2]>=0?'+':''}${(h[2]*100).toFixed(2)}%</td><td>${fmt(h[4]||0,0)} €</td></tr>`;
+    const isReconstituted = hasDemarc && catchupDateSet.has(rowDate);
+    const dateCell = isReconstituted
+      ? `${exD(h[0])} <span style="color:#f0b429;font-size:13px;font-weight:700">~</span>`
+      : exD(h[0]);
 
-    const demarcOpen = showDemarcOpen ? `<tr><td colspan="5" style="padding:0">
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:rgba(240,180,41,0.08);border-top:1.5px dashed var(--accent);border-bottom:1.5px dashed var(--accent)">
-        <span style="font-size:13px">⚠</span>
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--accent);letter-spacing:.5px;font-weight:600">DONNÉES RECONSTITUÉES — Les séances ci-dessous ont été recalculées depuis les prix historiques Yahoo / CoinGecko</span>
-      </div>
-    </td></tr>` : '';
+    const row = `<tr><td>${dateCell}</td><td style="${isReconstituted?'color:var(--text3)':''}">${fmt(h[1],2)} €</td><td class="${h[3]>=0?'up':'dn'}">${h[3]>=0?'+':''}${fmt(h[3],2)} €</td><td class="${h[2]>=0?'up':'dn'}">${h[2]>=0?'+':''}${(h[2]*100).toFixed(2)}%</td><td style="${isReconstituted?'color:var(--text3)':''}">${fmt(h[4]||0,0)} €</td></tr>`;
 
-    const demarcClose = showDemarcClose ? `<tr><td colspan="5" style="padding:0">
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:rgba(240,180,41,0.08);border-top:1.5px dashed var(--accent);border-bottom:1.5px dashed var(--accent)">
-        <span style="font-size:13px">⚠</span>
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--accent);letter-spacing:.5px;font-weight:600">FIN DES DONNÉES RECONSTITUÉES — Les séances ci-dessus ont été recalculées depuis les prix historiques Yahoo / CoinGecko</span>
-      </div>
-    </td></tr>` : '';
+    const demarcOpen  = '';
+    const demarcClose = '';
 
     return row + demarcOpen + demarcClose;
   }).join('');
@@ -10574,6 +10581,30 @@ function hideCatchupBanner() {
 
 fetchAllPrices();
 updateSheetsIndicator();
+// Restaurer la dernière page ouverte
+(function(){
+  const lastPage = localStorage.getItem('kyf-last-page');
+  if(lastPage && lastPage !== 'portfolio'){
+    const tab = document.querySelector(`.nav-tab[onclick*="'${lastPage}'"]`);
+    // Switch visuel immédiat
+    currentPage = lastPage;
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+    const pg = document.getElementById('page-'+lastPage); if(pg) pg.classList.add('active');
+    if(tab) tab.classList.add('active');
+    // Pages sans besoin de prix → render immédiat
+    const noPrice = ['transactions','historique','dca','bilan','geo'];
+    if(noPrice.includes(lastPage)){
+      renderedPages.add(lastPage);
+      if(lastPage==='transactions') try{renderTransactions();}catch(e){}
+      else if(lastPage==='historique') try{renderHistPage(); renderMensuelBarChart();}catch(e){}
+      else if(lastPage==='dca') try{renderDCA(); renderPlanned();}catch(e){}
+      else if(lastPage==='bilan') try{renderBilan();}catch(e){}
+      else if(lastPage==='geo') try{renderGeo();}catch(e){}
+    }
+    // Pages avec prix → render déclenché par fetchAllPrices
+  }
+})();
 // Pastille bug fixes sur bouton ⓘ
 (function(){
   const dot = document.getElementById('infoBugDot');
@@ -10870,7 +10901,7 @@ function renderAlertes(){
         const absPct = Math.abs(a.pct);
         const cls = absPct>=0.05?'crit':absPct>=0.03?'warn':'info';
         const dateStr = new Date(a.date).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
-        const typeBadge = `<span style="font-size:8px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,0.07);color:var(--text3);margin-left:4px">${a.type||'—'}</span>`;
+        const typeBadge = `<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,0.07);color:var(--text3);margin-left:4px">${a.type||'—'}</span>`;
         return `<div class="al-row ${cls}">
           <div class="al-date">${dateStr}</div>
           <div class="al-name">${a.etf}${typeBadge}</div>
@@ -13156,7 +13187,7 @@ function resetAll(){
   if(!confirm('⚠️ TOUT EFFACER — Toutes vos données KYF seront supprimées (positions, transactions, crypto, historique, préférences). Cette action est irréversible.')) return;
   const keys = Object.keys(localStorage).filter(k => 
     (k.startsWith('pea-') || k.startsWith('kyf-') || k.startsWith('cg-')) &&
-    k !== 'kyf-beta-unlocked' && k !== 'kyf-sheets-url' && k !== 'kyf-bugfix-seen'
+    k !== 'kyf-beta-unlocked' && k !== 'kyf-sheets-url' && k !== 'kyf-bugfix-seen' && k !== 'kyf-last-page'
   );
   keys.forEach(k => localStorage.removeItem(k));
   alert('Données effacées. Rechargement...');
@@ -13278,14 +13309,14 @@ document.addEventListener('DOMContentLoaded', function(){
 
   <!-- Bandeau bugs corrigés -->
   <div id="infoBugBanner" style="background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.3);border-radius:8px;padding:10px 12px;margin-bottom:14px;display:none">
-    <div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:4px;letter-spacing:.5px">🔧 BUGS CORRIGÉS DANS CETTE VERSION</div>
+    <div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:4px;letter-spacing:.5px">🔧 BUGS CORRIGÉS EN VERSION BETA 1</div>
     <div id="infoBugList" style="font-size:10px;color:var(--text2);line-height:1.9"></div>
   </div>
 
   <!-- Version actuelle -->
   <div style="background:linear-gradient(135deg,rgba(0,21,255,0.35) 0%,rgba(255,255,255,0.08) 50%,rgba(255,0,0,0.35) 100%);border-radius:8px;padding:10px 12px;margin-bottom:14px;outline:2px solid rgba(0,21,255,0.5)">
     <div style="display:flex;align-items:center;justify-content:space-between">
-      <span id="versionBadge" style="font-size:16px;font-weight:700;color:var(--text-hi)">Beta 1.5.0.42</span>
+      <span id="versionBadge" style="font-size:16px;font-weight:700;color:var(--text-hi)">Beta 1.5.0.51</span>
       <span style="font-size:10px;color:var(--text3)">31/05/2026</span>
     </div>
     <div style="font-size:10px;color:var(--text3);margin-top:6px;line-height:1.7">
@@ -13353,11 +13384,11 @@ document.addEventListener('DOMContentLoaded', function(){
       style="font-size:9px;font-weight:700;color:var(--text3);letter-spacing:1px;
       text-transform:uppercase;padding:6px 0;border-bottom:1px solid var(--border);
       cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
-      ⚖️ MENTIONS LÉGALES &amp; CONFIDENTIALITÉ <span class="leg-arrow">▸</span>
+      MENTIONS LÉGALES &amp; CONFIDENTIALITÉ <span class="leg-arrow">▸</span>
     </div>
-    <div style="display:none;padding:10px 0;font-size:10px;color:var(--text2);line-height:2">
+    <div style="display:none;padding:10px 0;font-size:11px;color:var(--text2);line-height:2">
       <div style="background:rgba(0,212,170,0.07);border:1px solid rgba(0,212,170,0.2);border-radius:8px;padding:10px 14px;margin-bottom:10px">
-        <div style="font-weight:700;color:var(--green);font-size:10px;margin-bottom:6px">🔒 VOS DONNÉES VOUS APPARTIENNENT</div>
+        <div style="font-weight:700;color:var(--green);font-size:11px;margin-bottom:6px">🔒 VOS DONNÉES VOUS APPARTIENNENT</div>
         <div>KYF n'enregistre <b>aucune donnée sur un serveur</b>. Toutes vos configurations et portefeuilles sont stockés <b>localement</b> sur votre navigateur via le LocalStorage. Vous pouvez les effacer à tout moment en vidant l'historique de votre navigateur, ou directement depuis <b>KYF → INFORMATIONS → Données locales</b>.</div>
       </div>
       <div style="margin-bottom:8px"><span style="color:var(--accent);font-weight:700">Données collectées :</span> Aucune. KYF ne collecte ni ne transmet aucune donnée personnelle.</div>
@@ -13365,7 +13396,7 @@ document.addEventListener('DOMContentLoaded', function(){
       <div style="margin-bottom:8px"><span style="color:var(--accent);font-weight:700">Services tiers :</span> Les prix sont récupérés via Yahoo Finance (données différées) et Google Apps Script. KYF n'est pas affilié à ces services.</div>
       <div style="margin-bottom:8px"><span style="color:var(--accent);font-weight:700">Responsabilité :</span> KYF est un outil de suivi patrimonial à titre informatif. Les données affichées ne constituent pas un conseil en investissement.</div>
       <div style="margin-bottom:8px"><span style="color:var(--accent);font-weight:700">Marques tierces :</span> Yahoo Finance, Google, Apple, Microsoft et autres noms de marques sont la propriété de leurs détenteurs respectifs.</div>
-      <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);color:var(--text3);font-size:9px">© 2026 Keep Your Folio — Tous droits réservés. Reproduction interdite sans autorisation.</div>
+      <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);color:var(--text3);font-size:10px">© 2026 Keep Your Folio — Tous droits réservés. Reproduction interdite sans autorisation.</div>
     </div>
   </div>
 
@@ -13422,6 +13453,27 @@ document.addEventListener('DOMContentLoaded', function(){
       scrollbar-width:thin;scrollbar-color:var(--border2) transparent">
 
 
+
+
+
+<div style="margin-bottom:12px">
+  <div style="color:var(--accent);font-weight:700;font-size:11px;letter-spacing:.3px;margin-bottom:3px;padding-bottom:3px;border-bottom:1px solid var(--border)">&#9656; Beta 1.5.0.50 &mdash; 02/06/2026</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; F5 &rarr; retour sur la derni&egrave;re page ouverte</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Pages sans prix (Transactions, Historique, DCA, Bilan, G&eacute;o) &rarr; affichage imm&eacute;diat</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Alertes : polices augment&eacute;es +1px sur tous les &eacute;l&eacute;ments</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Titre bandeau bugs renomm&eacute; &rarr; &ldquo;BUGS CORRIG&Eacute;S EN VERSION BETA 1&rdquo;</div>
+</div>
+
+<div style="margin-bottom:12px">
+  <div style="color:var(--accent);font-weight:700;font-size:11px;letter-spacing:.3px;margin-bottom:3px;padding-bottom:3px;border-bottom:1px solid var(--border)">&#9656; Beta 1.5.0.45 &mdash; 02/06/2026</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Journal des s&eacute;ances : bandeaux DONN&Eacute;ES RECONSTITU&Eacute;ES supprim&eacute;s</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Indicateur discret ~ orange sur les lignes reconstitu&eacute;es</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Boutons RESET (PEA, Crypto, Pr&eacute;f&eacute;rences, Tout) &rarr; confirm() natif</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Reset : kyf-beta-unlocked exclu (code d&apos;activation pr&eacute;serv&eacute;)</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Avertissement sauvegarde dans DONN&Eacute;ES LOCALES</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Favicon ajout&eacute; (image.png)</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Notice KYF optimis&eacute; PC sur &eacute;cran d&apos;activation</div>
+</div>
 
 <div style="margin-bottom:12px">
   <div style="color:var(--accent);font-weight:700;font-size:11px;letter-spacing:.3px;margin-bottom:3px;padding-bottom:3px;border-bottom:1px solid var(--border)">&#9656; Beta 1.5.0.34 &mdash; 01/06/2026</div>
