@@ -1,9 +1,9 @@
 <!--
   ============================================================
-  @file        : KYF_SHARE_beta1.5.0.67.html
+  @file        : KYF_SHARE_beta1.5.0.50.html
   @application : Keep Your Folio (KYF)
   @description : Dashboard de suivi de portefeuille financier
-  @version     : Beta 1.5.0.67
+  @version     : Beta 1.5.0.50
   @author      : Keep Your Folio
   @copyright   : © 2026 Keep Your Folio (KYF). Tous droits réservés.
   @license     : Proprietary — Toute reproduction, distribution ou
@@ -15,7 +15,7 @@
 <html lang="fr" data-theme="dark">
 <head>
 <meta charset="UTF-8">
-<link rel="icon" type="image/png" href="image.png">
+<link rel="icon" type="image/png" href="https://raw.githubusercontent.com/KeepYourFolio/kyf-beta/main/image.png">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -213,6 +213,7 @@ body {
   box-shadow: 0 2px 16px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.06) inset;
   gap: 8px;
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 @media(min-width:900px){
   .topbar { padding: 0 calc(50% - 518px); }
 }
@@ -2073,7 +2074,7 @@ body {
     <div class="kpi r" draggable="true" data-kpi-id="alertes-critiques"><div class="kpi-lbl">CRITIQUES > 4%</div><div class="kpi-val" id="kpi-alertes-critiques">—</div><div class="kpi-sub" id="kpi-alertes-critiques-sub">—</div></div>
     <div class="kpi" draggable="true" data-kpi-id="alertes-derniere"><div class="kpi-lbl">DERNIÈRE ALERTE</div><div class="kpi-val" id="kpi-last-alerte-date" style="font-size:14px">—</div><div class="kpi-sub" id="kpi-last-alerte-sub">—</div></div>
     <div class="kpi b" draggable="true" data-kpi-id="alertes-volatile"><div class="kpi-lbl">ETF LE + VOLATILE</div><div class="kpi-val" id="kpi-volatile-etf" style="font-size:14px">—</div><div class="kpi-sub" id="kpi-volatile-sub">—</div></div>
-    <div class="kpi g" draggable="true" data-kpi-id="alertes-seuil"><div class="kpi-lbl">SEUIL</div><div class="kpi-val" id="kpi-alertes-seuil">—</div><div class="kpi-sub">Variation journalière</div></div>
+    <div class="kpi g" draggable="true" data-kpi-id="alertes-seuil"><div class="kpi-lbl">SEUIL</div><div class="kpi-val" id="kpi-alertes-seuil">—</div><div class="kpi-sub">ETF · Action</div></div>
   </div>
   <div class="g2">
     <div class="card">
@@ -2083,7 +2084,7 @@ body {
     <div>
       <div class="card" style="margin-bottom:14px">
         <div class="card-title">ALERTES PAR ETF</div>
-        <div class="cw"><canvas id="alertsBarChart"></canvas></div>
+        <div class="cw s"><canvas id="alertsBarChart"></canvas></div>
       </div>
       <div class="card">
         <div class="card-title">DISTRIBUTION AMPLITUDES</div>
@@ -3693,7 +3694,12 @@ function generateAlertes(lp){
       type:   type,
       pct:    p.pct,
       price:  p.price,
-      msg:    (p.pct >= 0 ? '↑ Hausse' : '↓ Baisse') + ' de ' + Math.abs(p.pct*100).toFixed(2) + '%'
+      msg:    (()=>{
+        const up   = ['Momentum haussier','En progression','Belle séance','Signal positif','Rebond en cours'];
+        const down = ['Pression vendeuse','En repli','Consolidation','Vigilance','Signal négatif'];
+        const arr  = p.pct >= 0 ? up : down;
+        return arr[Math.floor(Math.abs(p.pct*1000)) % arr.length];
+      })()
     });
   });
 
@@ -4144,6 +4150,7 @@ function applyPriceFlashes(newPrices){
   _prevPrices = {...newPrices};
 }
 async function fetchAllPrices(force=false){
+  if(window._restoreCrypto) console.log('[KYF DEBUG] fetchAllPrices démarré, _restoreCrypto=true');
   const btn=document.getElementById('refreshBtn');
   const last=window._lastFetchAll||0;
   if(!force&&(Date.now()-last)<30000){if(btn)btn.classList.remove('loading');return;}
@@ -4273,12 +4280,16 @@ async function fetchAllPrices(force=false){
   try {
     if(typeof currentPage !== 'undefined' && currentPage !== 'portfolio'){
       const _p = currentPage;
-      if(_p === 'alertes')      { try{renderAlertes();}catch(e){} }
-      else if(_p === 'crypto')  { try{initCryptoPage();}catch(e){} }
+      if(_p === 'alertes')           { try{renderAlertes();}catch(e){} }
       else if(_p === 'transactions') { try{renderTransactions();}catch(e){} }
       else if(_p === 'historique')   { try{renderHistPage();}catch(e){} }
       else if(_p === 'dca')          { try{renderDCA(); renderPlanned();}catch(e){} }
       else if(_p === 'geo')          { try{renderGeo();}catch(e){} }
+      // Crypto — déclencher fetchCryptoPrices maintenant que ETF est chargé
+      else if(_p === 'crypto' && window._restoreCrypto) {
+        console.log('[KYF DEBUG] fetchAllPrices terminé → appel fetchCryptoPrices');
+        try{ fetchCryptoPrices(); }catch(e){ console.error('[KYF DEBUG] fetchCryptoPrices erreur:', e); }
+      }
     }
   } catch(e){}
 }
@@ -4715,6 +4726,8 @@ function initNavDrag(){
 
 function showPage(id,tab){
   currentPage=id;
+  // Hash routing — met à jour l'URL sans rechargement
+  if(window.location.hash !== '#'+id) history.replaceState(null,'','#'+id);
   localStorage.setItem('kyf-last-page', id);
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
@@ -8709,7 +8722,13 @@ let unreadCount = 0;
 function addLog(type, msg, source){
   if(!LOGS_ENABLED && type === 'infos' && source !== 'io') return; // infos silencieuses sauf I/O
   // Ignorer les warnings de timeout réseau — ils se résolvent au prochain refresh auto
-  if(type === 'warnings' && msg && (msg.includes('timed out') || msg.includes('signal') || msg.includes('AbortError'))) return;
+  if(type === 'warnings' && msg && (
+    msg.includes('timed out') || 
+    msg.includes('signal') || 
+    msg.includes('AbortError') ||
+    msg.includes('Failed to fetch') ||
+    msg.includes('CoinGecko fetch error')
+  )) return;
   const entry = {
     ts:     new Date().toLocaleTimeString('fr-FR'),
     msg:    String(msg),
@@ -10231,11 +10250,49 @@ analyticsPing();
 apiLoadAndDisplay();
 // ── Copyright ────────────────────────────────────────────────────
 console.log(
-  '%c© 2026 Keep Your Folio (KYF) — v1.5.0.67\n%cTous droits réservés. Reproduction interdite sans autorisation.',
+  '%c© 2026 Keep Your Folio (KYF) — Beta 1.5.0.98\n%cTous droits réservés. Reproduction interdite sans autorisation.',
   'color:#f0b429;font-weight:700;font-size:13px;padding:4px 0',
   'color:#6a80a8;font-size:10px'
 );
 // ─────────────────────────────────────────────────────────────────
+// Hash Routing — restaurer la page depuis l'URL ou localStorage
+(function(){
+  const validPages = ['portfolio','historique','heatmap','alertes','geo','transactions','investissement','bilan','crypto','dca'];
+  const hash = window.location.hash.replace('#','').toLowerCase().trim();
+  const lastPage = validPages.includes(hash) ? hash :
+                   (localStorage.getItem('kyf-last-page') || 'portfolio');
+
+  if(lastPage && lastPage !== 'portfolio'){
+    const tab = Array.from(document.querySelectorAll('.nav-tab')).find(t => (t.getAttribute('onclick')||'').includes("'"+lastPage+"'"));
+    currentPage = lastPage;
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+    const pg = document.getElementById('page-'+lastPage); if(pg) pg.classList.add('active');
+    if(tab) tab.classList.add('active');
+    if(!hash || !validPages.includes(hash)) history.replaceState(null,'','#'+lastPage);
+
+    const noPrice = ['transactions','historique','dca','bilan','geo'];
+    if(noPrice.includes(lastPage)){
+      renderedPages.add(lastPage);
+      if(lastPage==='transactions') try{renderTransactions();}catch(e){}
+      else if(lastPage==='historique') try{renderHistPage(); renderMensuelBarChart();}catch(e){}
+      else if(lastPage==='dca') try{renderDCA(); renderPlanned();}catch(e){}
+      else if(lastPage==='bilan') try{renderBilan();}catch(e){}
+      else if(lastPage==='geo') try{renderGeo();}catch(e){}
+    }
+    if(lastPage === 'crypto'){
+      console.log('[KYF DEBUG] HASH =', window.location.hash);
+      console.log('[KYF DEBUG] lastPage =', lastPage);
+      window._restoreCrypto = true;
+      console.log('[KYF DEBUG] _restoreCrypto = true');
+    }
+  }
+
+  window.addEventListener('hashchange', ()=>{
+    const h = window.location.hash.replace('#','').toLowerCase().trim();
+    if(validPages.includes(h) && h !== currentPage) showPage(h, null);
+  });
+})();
 renderNav();
 initKpiDrag();
 dcaCheckPending();
@@ -10593,30 +10650,7 @@ function hideCatchupBanner() {
 
 fetchAllPrices();
 updateSheetsIndicator();
-// Restaurer la dernière page ouverte
-(function(){
-  const lastPage = localStorage.getItem('kyf-last-page');
-  if(lastPage && lastPage !== 'portfolio'){
-    const tab = document.querySelector(`.nav-tab[onclick*="'${lastPage}'"]`);
-    // Switch visuel immédiat
-    currentPage = lastPage;
-    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-    document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
-    const pg = document.getElementById('page-'+lastPage); if(pg) pg.classList.add('active');
-    if(tab) tab.classList.add('active');
-    // Pages sans besoin de prix → render immédiat
-    const noPrice = ['transactions','historique','dca','bilan','geo'];
-    if(noPrice.includes(lastPage)){
-      renderedPages.add(lastPage);
-      if(lastPage==='transactions') try{renderTransactions();}catch(e){}
-      else if(lastPage==='historique') try{renderHistPage(); renderMensuelBarChart();}catch(e){}
-      else if(lastPage==='dca') try{renderDCA(); renderPlanned();}catch(e){}
-      else if(lastPage==='bilan') try{renderBilan();}catch(e){}
-      else if(lastPage==='geo') try{renderGeo();}catch(e){}
-    }
-    // Pages avec prix → render déclenché par fetchAllPrices
-  }
-})();
+
 // Pastille bug fixes sur bouton ⓘ
 (function(){
   const dot = document.getElementById('infoBugDot');
@@ -10643,6 +10677,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
         fetchCryptoPrices();
       } else {
         window._cryptoLoaded = true; // pas de crypto → considéré chargé
+        // Si F5 sur page crypto sans positions → render quand même la structure
+        if(window._restoreCrypto){
+          window._restoreCrypto = false;
+          renderedPages.delete('crypto');
+          window._skipFetchCryptoOnInit = true;
+          try{ initCryptoPage(); }catch(e){}
+          window._skipFetchCryptoOnInit = false;
+        }
       }
     } catch(e){ console.warn('[KYF] cryptoLoad startup:', e); window._cryptoLoaded = true; }
   }, 1000);
@@ -10864,7 +10906,11 @@ function renderAlertes(){
   kv('kpi-alertes-critiques', critiques, critiques>0?'var(--red)':'var(--green)');
   kv('kpi-alertes-critiques-sub', '≥ 5% de variation');
   if(last){
-    kv('kpi-last-alerte-date', new Date(last.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'}));
+    kv('kpi-last-alerte-date', (()=>{
+      const d = new Date(last.date);
+      const months = ['jan.','fév.','mar.','avr.','mai','jun.','jul.','aoû.','sep.','oct.','nov.','déc.'];
+      return String(d.getDate()).padStart(2,'0')+' '+months[d.getMonth()]+' '+String(d.getFullYear()).slice(2);
+    })());
     kv('kpi-last-alerte-sub',  last.etf+' '+(last.pct>=0?'+':'')+((last.pct||0)*100).toFixed(2)+'%');
   }
   // ETF le plus volatile
@@ -10872,7 +10918,7 @@ function renderAlertes(){
   ALERTS.forEach(a=>{ byEtfCnt[a.etf]=(byEtfCnt[a.etf]||0)+1; });
   const topEtf = Object.entries(byEtfCnt).sort((a,b)=>b[1]-a[1])[0];
   if(topEtf){ kv('kpi-volatile-etf', topEtf[0]); kv('kpi-volatile-sub', topEtf[1]+' alerte'+(topEtf[1]>1?'s':'')); }
-  kv('kpi-alertes-seuil', 'ETF '+seuils.etf+'% · Action '+seuils.action+'%');
+  kv('kpi-alertes-seuil', seuils.etf+'% / '+seuils.action+'%');
 
   // ── Seuils modulables ──
   const al = document.getElementById('alertsList');
@@ -10918,7 +10964,16 @@ function renderAlertes(){
           <div class="al-date">${dateStr}</div>
           <div class="al-name">${a.etf}${typeBadge}</div>
           <div class="al-pct ${cc(a.pct)}">${fmtP(a.pct)}</div>
-          <div class="al-msg">${a.msg}</div>
+          <div class="al-msg">${(()=>{
+            const msg = a.msg || '';
+            if(msg.includes('Hausse de') || msg.includes('Baisse de')){
+              const up   = ['Momentum haussier','En progression','Belle séance','Signal positif','Rebond en cours'];
+              const down = ['Pression vendeuse','En repli','Consolidation','Vigilance','Signal négatif'];
+              const arr  = msg.includes('Hausse') ? up : down;
+              return arr[Math.floor(Math.abs((a.pct||0)*1000)) % arr.length];
+            }
+            return msg;
+          })()}</div>
         </div>`;
       }).join('');
 
@@ -10970,7 +11025,7 @@ function updateSeuils(){
   saveAlertsSeuils({etf, action});
   // Mettre à jour le KPI seuil
   const el = document.getElementById('kpi-alertes-seuil');
-  if(el) el.textContent = 'ETF '+etf+'% · Action '+action+'%';
+  if(el) el.textContent = etf+'% / '+action+'%';
 }
 
 function clearAllAlertes(){
@@ -13340,7 +13395,7 @@ document.addEventListener('DOMContentLoaded', function(){
   <!-- Version actuelle -->
   <div style="background:linear-gradient(135deg,rgba(0,21,255,0.35) 0%,rgba(255,255,255,0.08) 50%,rgba(255,0,0,0.35) 100%);border-radius:8px;padding:10px 12px;margin-bottom:14px;outline:2px solid rgba(0,21,255,0.5)">
     <div style="display:flex;align-items:center;justify-content:space-between">
-      <span id="versionBadge" style="font-size:16px;font-weight:700;color:var(--text-hi)">Beta 1.5.0.67</span>
+      <span id="versionBadge" style="font-size:16px;font-weight:700;color:var(--text-hi)">Beta 1.5.0.98</span>
       <span style="font-size:10px;color:var(--text3)">31/05/2026</span>
     </div>
     <div style="font-size:10px;color:var(--text3);margin-top:6px;line-height:1.7">
@@ -13479,6 +13534,20 @@ document.addEventListener('DOMContentLoaded', function(){
 
 
 
+
+
+<div style="margin-bottom:12px">
+  <div style="color:var(--accent);font-weight:700;font-size:11px;letter-spacing:.3px;margin-bottom:3px;padding-bottom:3px;border-bottom:1px solid var(--border)">&#9656; Beta 1.5.0.98 &mdash; 03/06/2026</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; F5 sur page Crypto corrig&eacute; &mdash; Hash Routing (#crypto dans l&apos;URL)</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Crypto : disparition des positions apr&egrave;s navigation corrig&eacute;e</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Recherche crypto : majuscules accept&eacute;es + fuzzy search avec suggestions</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Bouton START guide d&eacute;marrage (Transactions, Crypto, Swap, Transfert)</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Alertes : phrases vari&eacute;es au lieu de &laquo;Baisse de X%&raquo;</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Alertes : date format&eacute;e &laquo;03 jun. 26&raquo;, graphique r&eacute;duit</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; NOUVELLE OP&Eacute;RATION : liste d&eacute;roulante lisible en th&egrave;me sombre</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; KYF_BETA_URL mis &agrave; jour pour codes Beta 2</div>
+  <div style="color:var(--text2);font-size:10px;font-weight:400;line-height:1.8">&middot; Warning &laquo;aucun indice snapshot&raquo; supprim&eacute; si portefeuille vide</div>
+</div>
 
 <div style="margin-bottom:12px">
   <div style="color:var(--accent);font-weight:700;font-size:11px;letter-spacing:.3px;margin-bottom:3px;padding-bottom:3px;border-bottom:1px solid var(--border)">&#9656; Beta 1.5.0.50 &mdash; 02/06/2026</div>
@@ -13787,12 +13856,12 @@ document.addEventListener('DOMContentLoaded', function(){
         <!-- Type -->
         <div style="margin-bottom:12px">
           <label style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text3);display:block;margin-bottom:4px;letter-spacing:.5px">TYPE</label>
-          <select id="op-type" onchange="renderOpsForm()" style="width:100%;font-family:'IBM Plex Mono',monospace;font-size:11px;background:rgba(255,255,255,0.07);border:1px solid var(--border2);color:var(--text);padding:8px 10px;border-radius:6px;cursor:pointer">
-            <option value="achat">🟢 Achat</option>
-            <option value="vente">🔴 Vente</option>
-            <option value="swap">🔄 Swap</option>
-            <option value="transfert">📦 Transfert</option>
-            <option value="frais">💸 Frais</option>
+          <select id="op-type" onchange="renderOpsForm()" style="width:100%;font-family:'IBM Plex Mono',monospace;font-size:11px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:8px 10px;border-radius:6px;cursor:pointer">
+            <option value="achat" style="background:var(--bg3);color:var(--text)">🟢 Achat</option>
+            <option value="vente" style="background:var(--bg3);color:var(--text)">🔴 Vente</option>
+            <option value="swap" style="background:var(--bg3);color:var(--text)">🔄 Swap</option>
+            <option value="transfert" style="background:var(--bg3);color:var(--text)">📦 Transfert</option>
+            <option value="frais" style="background:var(--bg3);color:var(--text)">💸 Frais</option>
           </select>
         </div>
 
@@ -13887,6 +13956,11 @@ function recalcPositionsFromOps(){
   const base = JSON.parse(JSON.stringify(CRYPTO_DEFAULTS.positions));
   const posMap = {};
   base.forEach(p => { posMap[p.nom.toLowerCase()] = {...p}; });
+
+  // Conserver les positions manuelles (soldes existants sans opération)
+  (cryptoState.positions||[]).forEach(p => {
+    if(p.manual) posMap[(p.nom||'').toLowerCase()] = {...p};
+  });
   const ops = [...(cryptoState.operations||[])].sort((a,b)=>a.date.localeCompare(b.date));
   ops.forEach(op => {
     if(op.historique) return; // ignorer les opérations historiques
@@ -14043,11 +14117,19 @@ async function fetchCryptoPrices(){
   window._cryptoLoaded = true;
   tryDailySnapshot();
   try { if(typeof currentPage !== 'undefined' && currentPage === 'heatmap') renderHeatmap(); } catch(e){}
-  // Si on est sur la page crypto, re-render après chargement CoinGecko
-  try { if(typeof currentPage !== 'undefined' && currentPage === 'crypto') {
-    initCryptoPage();
-    setTimeout(()=>{ try{ renderCryptoAll(); renderCryptoIntradayChart(); }catch(e){} }, 300);
-  } } catch(e){}
+  console.log('[KYF DEBUG] fetchCryptoPrices terminé, _restoreCrypto =', window._restoreCrypto);
+  if(window._restoreCrypto){
+    window._restoreCrypto = false;
+    renderedPages.delete('crypto');
+    window._skipFetchCryptoOnInit = true;
+    try{ initCryptoPage(); }catch(e){ console.error('[KYF DEBUG] initCryptoPage erreur:', e); }
+    window._skipFetchCryptoOnInit = false;
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    const pg = document.getElementById('page-crypto');
+    if(pg) pg.classList.add('active');
+    currentPage = 'crypto';
+    return;
+  }
 }
 
 // ── Rendu complet ─────────────────────────────────────────────────
@@ -14122,11 +14204,12 @@ async function addCryptoSearch(query){
         const scored = CRYPTO_FUZZY_LIST.map(c=>({
           ...c, score:Math.min(levenshtein(q,c.name.toLowerCase()),levenshtein(q,c.symbol.toLowerCase()))
         })).filter(c=>c.score<=3).sort((a,b)=>a.score-b.score).slice(0,4);
-        coins = scored.map(c=>({id:c.id,name:c.name,symbol:c.symbol,thumb:null,market_cap_rank:null,_fuzzy:true}));
+        coins = scored.map(c=>({id:c.id,name:c.name,symbol:c.symbol,thumb:c.thumb||null,market_cap_rank:null,_fuzzy:true}));
       }
       if(!coins.length){ results.style.display='none'; return; }
       results.innerHTML = coins.map(c=>`
-        <div onclick="addCryptoSelectCoin('${c.id}','${c.name.replace(/'/g,"\'")}','${c.symbol.toLowerCase()}')"
+        <div data-id="${c.id}" data-name="${encodeURIComponent(c.name)}" data-symbol="${c.symbol.toLowerCase()}"
+          onmousedown="addCryptoSelectCoin(this.dataset.id, decodeURIComponent(this.dataset.name), this.dataset.symbol)"
           style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;
           font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text2);
           border-bottom:1px solid var(--border)"
@@ -14170,11 +14253,13 @@ function confirmAddCryptoPosition(){
 
   // Ajouter la position
   cryptoState.positions.push({
+    id:     'pos_' + Date.now(),
     ticker: id,
     nom:    name,
     symbol: symbol,
     pru:    pru,
-    qte:    qte
+    qte:    qte,
+    manual: true  // position ajoutée manuellement (solde existant)
   });
 
   cryptoSave();
@@ -14776,7 +14861,7 @@ function initCryptoPage(){
   // Restaurer la devise sauvegardée
   setTimeout(()=>setCryptoDevise(_cryptoDevise), 50);
   renderCryptoAll();
-  fetchCryptoPrices();
+  if(!window._skipFetchCryptoOnInit) fetchCryptoPrices();
   // Refresh automatique toutes les 60s
   if(_cryptoRefreshInterval) clearInterval(_cryptoRefreshInterval);
   _cryptoRefreshInterval = setInterval(()=>{
