@@ -4865,7 +4865,9 @@ function renderPerfChart(){
     // Fallback : si les snapshots n'ont pas d'indices, utiliser _kyfIndices live
     // (données du jour uniquement — benchmark ne sera pas disponible sans historique)
     if(!bmFromSnap.SP500.length && !bmFromSnap.CAC40.length && !bmFromSnap.MSCIWorld.length){
-      console.warn('[KYF] Benchmark: aucun indice dans les snapshots. Videz et re-simulez via Shift+D.');
+      // Avertir uniquement si l'utilisateur a des données (pas un nouveau portefeuille vide)
+      const hasData = (window._etfData && window._etfData.length > 0) || (typeof cryptoState !== 'undefined' && cryptoState.positions && cryptoState.positions.length > 0);
+      if(hasData) console.warn('[KYF] Benchmark: aucun indice dans les snapshots. Videz et re-simulez via Shift+D.');
     }
 
     if(bmFromSnap.SP500.length)     BENCHMARK_DATA['SP500']     = bmFromSnap.SP500;
@@ -13338,7 +13340,7 @@ document.addEventListener('DOMContentLoaded', function(){
   <!-- Version actuelle -->
   <div style="background:linear-gradient(135deg,rgba(0,21,255,0.35) 0%,rgba(255,255,255,0.08) 50%,rgba(255,0,0,0.35) 100%);border-radius:8px;padding:10px 12px;margin-bottom:14px;outline:2px solid rgba(0,21,255,0.5)">
     <div style="display:flex;align-items:center;justify-content:space-between">
-      <span id="versionBadge" style="font-size:16px;font-weight:700;color:var(--text-hi)">Beta 1.5.0.63</span>
+      <span id="versionBadge" style="font-size:16px;font-weight:700;color:var(--text-hi)">Beta 1.5.0.67</span>
       <span style="font-size:10px;color:var(--text3)">31/05/2026</span>
     </div>
     <div style="font-size:10px;color:var(--text3);margin-top:6px;line-height:1.7">
@@ -14075,19 +14077,56 @@ function closeAddCryptoPosition(){
 }
 
 let _addCryptoTimer = null;
+// Lista locale top cryptos pour fuzzy fallback
+const CRYPTO_FUZZY_LIST = [
+  {id:'bitcoin',name:'Bitcoin',symbol:'BTC',thumb:'https://coin-images.coingecko.com/coins/images/1/thumb/bitcoin.png'},
+  {id:'ethereum',name:'Ethereum',symbol:'ETH',thumb:'https://coin-images.coingecko.com/coins/images/279/thumb/ethereum.png'},
+  {id:'solana',name:'Solana',symbol:'SOL',thumb:'https://coin-images.coingecko.com/coins/images/4128/thumb/solana.png'},
+  {id:'binancecoin',name:'BNB',symbol:'BNB',thumb:'https://coin-images.coingecko.com/coins/images/825/thumb/bnb-icon2_2x.png'},
+  {id:'ripple',name:'XRP',symbol:'XRP',thumb:'https://coin-images.coingecko.com/coins/images/44/thumb/xrp-symbol-white-128.png'},
+  {id:'cardano',name:'Cardano',symbol:'ADA',thumb:'https://coin-images.coingecko.com/coins/images/975/thumb/cardano.png'},
+  {id:'dogecoin',name:'Dogecoin',symbol:'DOGE',thumb:'https://coin-images.coingecko.com/coins/images/5/thumb/dogecoin.png'},
+  {id:'avalanche-2',name:'Avalanche',symbol:'AVAX',thumb:'https://coin-images.coingecko.com/coins/images/12559/thumb/Avalanche_Circle_RedWhite_Trans.png'},
+  {id:'polkadot',name:'Polkadot',symbol:'DOT',thumb:'https://coin-images.coingecko.com/coins/images/12171/thumb/polkadot.png'},
+  {id:'chainlink',name:'Chainlink',symbol:'LINK',thumb:'https://coin-images.coingecko.com/coins/images/877/thumb/chainlink-new-logo.png'},
+  {id:'litecoin',name:'Litecoin',symbol:'LTC',thumb:'https://coin-images.coingecko.com/coins/images/2/thumb/litecoin.png'},
+  {id:'uniswap',name:'Uniswap',symbol:'UNI',thumb:'https://coin-images.coingecko.com/coins/images/12504/thumb/uniswap-uni.png'},
+  {id:'stellar',name:'Stellar',symbol:'XLM',thumb:'https://coin-images.coingecko.com/coins/images/100/thumb/Stellar_symbol_black_RGB.png'},
+  {id:'cosmos',name:'Cosmos',symbol:'ATOM',thumb:'https://coin-images.coingecko.com/coins/images/1481/thumb/cosmos_hub.png'},
+  {id:'monero',name:'Monero',symbol:'XMR',thumb:'https://coin-images.coingecko.com/coins/images/69/thumb/monero_logo.png'},
+  {id:'tron',name:'TRON',symbol:'TRX',thumb:'https://coin-images.coingecko.com/coins/images/1094/thumb/tron-logo.png'},
+  {id:'shiba-inu',name:'Shiba Inu',symbol:'SHIB',thumb:'https://coin-images.coingecko.com/coins/images/11939/thumb/shiba.png'},
+  {id:'near',name:'NEAR Protocol',symbol:'NEAR',thumb:'https://coin-images.coingecko.com/coins/images/10365/thumb/near.jpg'},
+  {id:'matic-network',name:'Polygon',symbol:'MATIC',thumb:'https://coin-images.coingecko.com/coins/images/4713/thumb/matic-token-icon.png'},
+  {id:'pepe',name:'Pepe',symbol:'PEPE',thumb:'https://coin-images.coingecko.com/coins/images/29850/thumb/pepe-token.jpeg'},
+];
+function levenshtein(a,b){
+  const m=a.length,n=b.length;
+  const dp=Array.from({length:m+1},(_,i)=>Array.from({length:n+1},(_,j)=>i?j?0:i:j));
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++)
+    dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]:1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+  return dp[m][n];
+}
 async function addCryptoSearch(query){
   const results = document.getElementById('addCryptoResults');
   if(!query || query.length < 2){ results.style.display='none'; return; }
   if(_addCryptoTimer) clearTimeout(_addCryptoTimer);
   _addCryptoTimer = setTimeout(async()=>{
     try{
-      const r = await fetch(coingeckoUrl('search?query='+encodeURIComponent(query)), {cache:'no-store'});
+      const q = query.trim().toLowerCase();
+      const r = await fetch(coingeckoUrl('search?query='+encodeURIComponent(q)), {cache:'no-store'});
       if(!r.ok) return;
       const d = await r.json();
-      const coins = (d.coins||[]).slice(0,8);
+      let coins = (d.coins||[]).slice(0,8);
+      if(!coins.length){
+        const scored = CRYPTO_FUZZY_LIST.map(c=>({
+          ...c, score:Math.min(levenshtein(q,c.name.toLowerCase()),levenshtein(q,c.symbol.toLowerCase()))
+        })).filter(c=>c.score<=3).sort((a,b)=>a.score-b.score).slice(0,4);
+        coins = scored.map(c=>({id:c.id,name:c.name,symbol:c.symbol,thumb:null,market_cap_rank:null,_fuzzy:true}));
+      }
       if(!coins.length){ results.style.display='none'; return; }
       results.innerHTML = coins.map(c=>`
-        <div onclick="addCryptoSelectCoin('${c.id}','${c.name.replace(/'/g,"\\'")}','${c.symbol.toLowerCase()}')"
+        <div onclick="addCryptoSelectCoin('${c.id}','${c.name.replace(/'/g,"\'")}','${c.symbol.toLowerCase()}')"
           style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;
           font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text2);
           border-bottom:1px solid var(--border)"
@@ -14097,13 +14136,13 @@ async function addCryptoSearch(query){
             `<div style="width:18px;height:18px;border-radius:50%;background:var(--bg4)"></div>`}
           <span style="font-weight:600;color:var(--text)">${c.name}</span>
           <span style="color:var(--text3);font-size:10px">${c.symbol.toUpperCase()}</span>
-          ${c.market_cap_rank?`<span style="margin-left:auto;color:var(--text3);font-size:9px">#${c.market_cap_rank}</span>`:''}
+          ${c._fuzzy?`<span style="margin-left:auto;color:var(--accent);font-size:9px">suggestion</span>`:
+            c.market_cap_rank?`<span style="margin-left:auto;color:var(--text3);font-size:9px">#${c.market_cap_rank}</span>`:''}
         </div>`).join('');
       results.style.display = 'block';
     }catch(e){}
   }, 350);
 }
-
 function addCryptoSelectCoin(id, name, symbol){
   document.getElementById('addCryptoSearchInput').value = name+' ('+symbol.toUpperCase()+')';
   document.getElementById('addCryptoResults').style.display = 'none';
@@ -16728,53 +16767,74 @@ async function activateBeta(){
     <button onclick="toggleStartGuide()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:2px 6px">✕</button>
   </div>
 
-  <!-- Grille 2x2 -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-
+  <!-- Grille top 2x2 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
     <div style="background:rgba(0,212,170,0.12);border:1px solid rgba(0,212,170,0.4);border-radius:10px;padding:12px">
       <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px;letter-spacing:.5px">01 — ETF & ACTIONS</div>
       <div style="font-size:11px;color:var(--text2);line-height:1.9">
         · Onglet <strong style="color:var(--text)">PORTEFEUILLE</strong> → <strong style="color:var(--text)">+ AJOUTER</strong><br>
         · Recherchez par nom ou ticker Yahoo<br>
-        · Ex: <span style="color:var(--accent)">CW8.PA</span>, <span style="color:var(--accent)">AAPL</span><br>
+        · Ex: <span style="color:var(--accent)">CW8.PA</span>, <span style="color:var(--accent)">NVDA</span>, <span style="color:var(--accent)">TTE.PA</span><br>
         · Renseignez PRU et quantité<br>
-        · Prix récupéré automatiquement
+        · <span style="color:var(--accent)">Prix complété automatiquement</span>
       </div>
     </div>
-
     <div style="background:rgba(0,212,170,0.12);border:1px solid rgba(0,212,170,0.4);border-radius:10px;padding:12px">
       <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px;letter-spacing:.5px">02 — CRYPTOS</div>
       <div style="font-size:11px;color:var(--text2);line-height:1.9">
         · Onglet <strong style="color:var(--text)">CRYPTO</strong> → <strong style="color:var(--text)">+ AJOUTER</strong><br>
         · Recherchez par nom (ex: <span style="color:var(--accent)">Bitcoin</span>)<br>
-        · Renseignez PRU (€ ou $) et quantité<br>
-        · Prix en temps réel via CoinGecko<br>
-        · Variation du jour incluse
+        · PRU en € ou $ · Quantité<br>
+        · <span style="color:var(--accent)">Prix temps réel via CoinGecko</span>
       </div>
     </div>
+  </div>
 
+  <!-- Transactions -->
+  <div style="background:rgba(0,212,170,0.12);border:1px solid rgba(0,212,170,0.4);border-radius:10px;padding:12px;margin-bottom:10px">
+    <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px;letter-spacing:.5px">03 — TRANSACTIONS — ACHATS & VENTES</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.5px;margin-bottom:5px">ETF & ACTIONS</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.9">
+          Onglet <strong style="color:var(--text)">TRANSACTIONS</strong><br>
+          <span style="color:#00d4aa">+</span> Achat — date, quantité, prix, frais<br>
+          <span style="color:#ff4560">−</span> Vente — PRU mis à jour auto<br>
+          <span style="color:var(--accent)">Le portefeuille se recalcule seul</span>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.5px;margin-bottom:5px">CRYPTO — OPÉRATIONS</div>
+        <div style="font-size:11px;color:var(--text2);line-height:1.9">
+          <span style="background:rgba(0,212,170,0.2);color:var(--accent);border-radius:3px;padding:0 5px;font-size:10px">Achat</span> entrée de position<br>
+          <span style="background:rgba(255,69,96,0.2);color:#ff4560;border-radius:3px;padding:0 5px;font-size:10px">Vente</span> sortie partielle ou totale<br>
+          <span style="background:rgba(77,159,255,0.2);color:#4d9fff;border-radius:3px;padding:0 5px;font-size:10px">Swap</span> échange crypto → crypto<br>
+          <span style="background:rgba(255,159,67,0.2);color:#ff9f43;border-radius:3px;padding:0 5px;font-size:10px">Transfert</span> entre wallets
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Grille bottom 2x2 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
     <div style="background:rgba(0,212,170,0.12);border:1px solid rgba(0,212,170,0.4);border-radius:10px;padding:12px">
-      <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px;letter-spacing:.5px">03 — SAUVEGARDER</div>
+      <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px;letter-spacing:.5px">04 — SAUVEGARDER</div>
       <div style="font-size:11px;color:var(--text2);line-height:1.9">
-        · Données stockées <strong style="color:var(--text)">localement</strong><br>
-        · Icône <strong style="color:var(--text)">🗄 Import/Export</strong> en haut à droite<br>
-        · Exportez régulièrement<br>
+        · Icône <strong style="color:var(--text)">Import/Export</strong> haut droite<br>
         · Export <strong style="color:var(--text)">chiffré</strong> — données privées<br>
-        · Transférable sur un autre appareil
+        · Transférable sur un autre appareil<br>
+        · <span style="color:#ff9f43">Vider cache = perte données</span>
       </div>
     </div>
-
     <div style="background:rgba(255,159,67,0.12);border:1px solid rgba(255,159,67,0.4);border-radius:10px;padding:12px">
-      <div style="font-size:11px;font-weight:700;color:#ff9f43;margin-bottom:6px;letter-spacing:.5px">04 — IMPORTANT</div>
+      <div style="font-size:11px;font-weight:700;color:#ff9f43;margin-bottom:6px;letter-spacing:.5px">05 — IMPORTANT</div>
       <div style="font-size:11px;color:var(--text2);line-height:1.9">
         · <strong style="color:var(--text)">100% local</strong> — aucune donnée envoyée<br>
-        · Vider le cache = perte des données<br>
-        · <strong style="color:var(--text)">Exportez régulièrement</strong><br>
         · Optimisé pour <strong style="color:var(--text)">ordinateur</strong><br>
-        · F5 = retour sur la dernière page
+        · F5 → retour sur la dernière page<br>
+        · <strong style="color:var(--text)">1 700+</strong> actifs en base communautaire
       </div>
     </div>
-
   </div>
 
   <!-- Footer -->
