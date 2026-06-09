@@ -1345,7 +1345,7 @@ body {
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
     <div>
       <div style="font-size:12px;color:var(--text3);letter-spacing:.5px;margin-bottom:6px">PRU (€)</div>
-      <input id="etfPRU" type="number" min="0" step="0.001" placeholder="0.000"
+      <input id="etfPRU" type="text" inputmode="decimal" placeholder="ex: 1 500,23 ou 1500.23"
         style="width:100%;box-sizing:border-box;font-family:'IBM Plex Mono',monospace;font-size:12px;
         padding:10px 12px;border-radius:8px;border:1px solid var(--border2);
         background:rgba(255,255,255,0.07);color:var(--text);outline:none;transition:border-color .15s"
@@ -1355,7 +1355,7 @@ body {
     </div>
     <div>
       <div style="font-size:12px;color:var(--text3);letter-spacing:.5px;margin-bottom:6px">QUANTITÉ</div>
-      <input id="etfQTY" type="number" min="0" step="0.001" placeholder="0"
+      <input id="etfQTY" type="text" inputmode="decimal" placeholder="ex: 12,5 ou 12.5"
         style="width:100%;box-sizing:border-box;font-family:'IBM Plex Mono',monospace;font-size:12px;
         padding:10px 12px;border-radius:8px;border:1px solid var(--border2);
         background:rgba(255,255,255,0.07);color:var(--text);outline:none;transition:border-color .15s"
@@ -3834,6 +3834,13 @@ function fmtP(v){ if(v===null||isNaN(v))return'—'; return (v>=0?'+':'')+(v*100
 function cc(v){ return v>0?'up':v<0?'dn':'nu'; }
 function getCSSVar(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
 function isDark(){ return document.documentElement.getAttribute('data-theme')==='dark'; }
+
+// ── Utilitaire : parse nombre avec espaces et virgules (copier-coller friendly)
+function parseNum(str){
+  if(typeof str === 'number') return str;
+  return parseFloat((str||'').toString().replace(/\s/g,'').replace(',','.')) || 0;
+}
+
 
 // ── Tooltip DOM style helper — lit tooltipPrefs ──────────────────
 function getTipBorderColor(){
@@ -7793,8 +7800,8 @@ function clearETFSelection(){
 
 // ── Calculer montant investi en live ──────────────────────────
 function etfCalcInvesti(){
-  const pru = parseFloat(document.getElementById('etfPRU').value)||0;
-  const qty = parseFloat(document.getElementById('etfQTY').value)||0;
+  const pru = parseNum(document.getElementById('etfPRU').value);
+  const qty = parseNum(document.getElementById('etfQTY').value);
   const prev = document.getElementById('etfInvestiPreview');
   if(pru > 0 && qty > 0){
     document.getElementById('etfInvestiVal').textContent = fmt(pru * qty, 2) + ' €';
@@ -7807,8 +7814,8 @@ function etfCalcInvesti(){
 // ── Confirmer ajout / modification ───────────────────────────
 function confirmAddETF(){
   const err  = document.getElementById('etfAddError');
-  const pru  = parseFloat(document.getElementById('etfPRU').value);
-  const qty  = parseFloat(document.getElementById('etfQTY').value);
+  const pru  = parseNum(document.getElementById('etfPRU').value);
+  const qty  = parseNum(document.getElementById('etfQTY').value);
 
   // Validations
   if(!_etfSelected){
@@ -14600,8 +14607,8 @@ function confirmAddCryptoPosition(){
   const id     = document.getElementById('addCryptoId').value;
   const name   = document.getElementById('addCryptoName').value;
   const symbol = document.getElementById('addCryptoSymbol').value;
-  const pru    = parseFloat(document.getElementById('addCryptoPRU').value);
-  const qte    = parseFloat(document.getElementById('addCryptoQTE').value);
+  const pru    = parseNum(document.getElementById('addCryptoPRU').value);
+  const qte    = parseNum(document.getElementById('addCryptoQTE').value);
 
   if(!id){ err.textContent='Sélectionnez une crypto dans la liste'; err.style.display='block'; return; }
   if(isNaN(pru)||pru<0){ err.textContent='PRU invalide'; err.style.display='block'; return; }
@@ -15361,7 +15368,7 @@ function renderOpsForm(){
     </div>`;
     html += `<div style="margin-bottom:10px">
       <label style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text3);display:block;margin-bottom:4px;letter-spacing:.5px">MONTANT RÉCUPÉRÉ (€ ou $)</label>
-      <input id="op-montant" type="number" placeholder="ex: 3400 (€ ou $)" oninput="this.dataset.manual='1'"
+      <input id="op-montant" type="text" inputmode="decimal" placeholder="ex: 3 400,50 ou 3400.5" oninput="this.dataset.manual='1'"
         style="width:100%;font-family:'IBM Plex Mono',monospace;font-size:11px;background:rgba(255,255,255,0.07);border:1px solid var(--border2);color:var(--text);padding:8px 10px;border-radius:6px;outline:none;box-sizing:border-box">
     </div>`;
   } else if(type==='swap'){
@@ -17167,7 +17174,7 @@ async function activateBeta(){
   <!-- PRU -->
   <div style="margin-bottom:12px">
     <div style="font-size:9px;color:var(--text3);letter-spacing:.5px;margin-bottom:6px">PRU (€ ou $)</div>
-    <input id="addCryptoPRU" type="number" placeholder="ex: 67000 (€ ou $)" min="0" step="any"
+    <input id="addCryptoPRU" type="text" inputmode="decimal" placeholder="ex: 67 000,50 ou 67000.5"
       style="width:100%;box-sizing:border-box;font-family:'IBM Plex Mono',monospace;font-size:11px;
       padding:10px 12px;border-radius:8px;border:1px solid var(--border2);
       background:rgba(255,255,255,0.07);color:var(--text);outline:none">
@@ -17176,7 +17183,7 @@ async function activateBeta(){
   <!-- QTÉ -->
   <div style="margin-bottom:18px">
     <div style="font-size:9px;color:var(--text3);letter-spacing:.5px;margin-bottom:6px">QUANTITÉ</div>
-    <input id="addCryptoQTE" type="number" placeholder="ex: 0.00229" min="0" step="any"
+    <input id="addCryptoQTE" type="text" inputmode="decimal" placeholder="ex: 0,00229 ou 0.00229"
       style="width:100%;box-sizing:border-box;font-family:'IBM Plex Mono',monospace;font-size:11px;
       padding:10px 12px;border-radius:8px;border:1px solid var(--border2);
       background:rgba(255,255,255,0.07);color:var(--text);outline:none">
