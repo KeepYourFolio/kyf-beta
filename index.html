@@ -1,9 +1,9 @@
 <!--
   ============================================================
-  @file        : KYF_SHARE_beta1.6.0.62.html
+  @file        : KYF_SHARE_beta1.6.0.61.html
   @application : Keep Your Folio (KYF)
   @description : Dashboard de suivi de portefeuille financier
-  @version     : Beta 1.6.0.62
+  @version     : Beta 1.6.0.61
   @author      : Keep Your Folio
   @copyright   : © 2026 Keep Your Folio (KYF). Tous droits réservés.
   @license     : Proprietary — Toute reproduction, distribution ou
@@ -7938,10 +7938,10 @@ function renderETFTable(lp){
       ${showCol('gpp')?`<td class="${gain>=0?'up':'dn'}">${invest>0&&!isNaN(gainPct)?(gain>=0?'+':'')+(gainPct*100).toFixed(2)+' %':'—'}</td>`:''}
       ${showCol('repartition')?`<td style="color:var(--text2)">${repartition>0?(repartition*100).toFixed(2)+'%':''}</td>`:''}
       <td style="white-space:nowrap;padding:4px 6px">
-        <button onclick="openEditETF(${i})" title="Modifier"
+        <button onclick="openEditETF(${ETF.indexOf(e)})" title="Modifier"
           style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;padding:2px 4px;border-radius:4px;transition:color .15s"
           onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text3)'">✏️</button>
-        <button onclick="deleteETF(${i})" title="Supprimer"
+        <button onclick="deleteETF(${ETF.indexOf(e)})" title="Supprimer"
           style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;padding:2px 4px;border-radius:4px;transition:color .15s"
           onmouseover="this.style.color='#ff4560'" onmouseout="this.style.color='var(--text3)'">🗑</button>
       </td>
