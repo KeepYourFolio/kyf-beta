@@ -14291,7 +14291,7 @@ function openEditCrypto(ticker){
   document.getElementById('addCryptoSearchInput').value = p.nom + ' (' + p.ticker + ')';
   document.getElementById('addCryptoId').value     = p.ticker;
   document.getElementById('addCryptoName').value   = p.nom;
-  document.getElementById('addCryptoSymbol').value = p.ticker;
+  document.getElementById('addCryptoSymbol').value = p.symbol || p.ticker;
   document.getElementById('addCryptoPRU').value    = p.pru;
   document.getElementById('addCryptoQTE').value    = p.qte;
   // Marquer comme édition
@@ -14479,41 +14479,151 @@ function setCryptoDevise(d){
 function getCryptoSymbol(){ return window._cryptoDevise === 'usd' ? '$' : '€'; }
 function getCryptoRate(){ return window._cryptoDevise === 'usd' ? 'usd' : 'eur'; }
 
+// ── Fonctions de fetch par source ────────────────────────────────
+
+async function _fetchFromCoinGecko(ids){
+  const [rEur, rUsd] = await Promise.all([
+    fetch(coingeckoUrl('coins/markets?ids='+ids+'&vs_currency=eur&price_change_percentage=24h&sparkline=true'), {cache:'no-store', signal:AbortSignal.timeout(10000)}),
+    fetch(coingeckoUrl('coins/markets?ids='+ids+'&vs_currency=usd&price_change_percentage=24h&sparkline=false'), {cache:'no-store', signal:AbortSignal.timeout(10000)})
+  ]);
+  if(!rEur.ok) throw new Error('CoinGecko '+rEur.status);
+  const dEur = await rEur.json();
+  if(!Array.isArray(dEur)) throw new Error('CoinGecko réponse invalide');
+  const dUsd = rUsd.ok ? await rUsd.json() : [];
+  const usdMap = {};
+  (Array.isArray(dUsd)?dUsd:[]).forEach(c=>{ usdMap[c.id]=c.current_price||0; });
+  return dEur.map(coin=>({
+    id: coin.id, eur: coin.current_price||0,
+    usd: usdMap[coin.id]||0,
+    change24h: coin.price_change_percentage_24h||0,
+    image: coin.image||'',
+    sparkline: coin.sparkline_in_7d?.price||[]
+  }));
+}
+
+async function _fetchFromCoinPaprika(ids){
+  // CoinPaprika : 1 appel par coin mais très permissif — on fait en parallèle
+  const results = await Promise.all(ids.split(',').map(async id=>{
+    try{
+      const r = await fetch('https://api.coinpaprika.com/v1/tickers/'+id+'-'+id+'?quotes=EUR,USD', {signal:AbortSignal.timeout(8000)});
+      // CoinPaprika utilise des IDs différents — on essaie le format standard
+      if(!r.ok){
+        // Fallback : chercher l'ID CoinPaprika depuis le nom
+        const r2 = await fetch('https://api.coinpaprika.com/v1/coins', {signal:AbortSignal.timeout(8000)});
+        return null;
+      }
+      const d = await r.json();
+      const eur = d.quotes?.EUR?.price||0;
+      const usd = d.quotes?.USD?.price||0;
+      const change24h = d.quotes?.EUR?.percent_change_24h||0;
+      return { id, eur, usd, change24h, image:'', sparkline:[] };
+    }catch(e){ return null; }
+  }));
+  const valid = results.filter(Boolean);
+  if(!valid.length) throw new Error('CoinPaprika aucun résultat');
+  return valid;
+}
+
+async function _fetchFromBinance(ids){
+  // Binance : prix USD uniquement, on convertit en EUR
+  const fxRate = window._fxRates?.USD || 0.92;
+  const BINANCE_SYMBOLS = {
+    bitcoin:'BTCUSDT', ethereum:'ETHUSDT', solana:'SOLUSDT', ripple:'XRPUSDT',
+    binancecoin:'BNBUSDT', cardano:'ADAUSDT', dogecoin:'DOGEUSDT', 'shiba-inu':'SHIBUSDT',
+    polkadot:'DOTUSDT', litecoin:'LTCUSDT', 'avalanche-2':'AVAXUSDT', chainlink:'LINKUSDT',
+    uniswap:'UNIUSDT', cosmos:'ATOMUSDT', stellar:'XLMUSDT', monero:'XMRUSDT',
+    'matic-network':'MATICUSDT', 'near':'NEARUSDT', 'internet-computer':'ICPUSDT',
+  };
+  const idList = ids.split(',');
+  const symbols = idList.map(id=>BINANCE_SYMBOLS[id]).filter(Boolean);
+  if(!symbols.length) throw new Error('Binance: aucun symbol connu');
+
+  const r = await fetch('https://api.binance.com/api/v3/ticker/24hr?symbols='+encodeURIComponent(JSON.stringify(symbols)), {signal:AbortSignal.timeout(8000)});
+  if(!r.ok) throw new Error('Binance '+r.status);
+  const data = await r.json();
+
+  const results = [];
+  data.forEach(d=>{
+    const id = Object.entries(BINANCE_SYMBOLS).find(([,s])=>s===d.symbol)?.[0];
+    if(!id) return;
+    const usd = parseFloat(d.lastPrice)||0;
+    const eur = usd * fxRate;
+    const change24h = parseFloat(d.priceChangePercent)||0;
+    results.push({ id, eur, usd, change24h, image:'', sparkline:[] });
+  });
+  if(!results.length) throw new Error('Binance aucun résultat parsé');
+  return results;
+}
+
+function _applyPriceResults(data){
+  let rateSum=0, rateCount=0;
+  data.forEach(coin=>{
+    const eur=coin.eur, usd=coin.usd;
+    if(eur>0 && usd>0){ rateSum+=usd/eur; rateCount++; }
+    // Conserver sparkline existant si la nouvelle source n'en a pas
+    const existing = cryptoPrices[coin.id];
+    cryptoPrices[coin.id] = {
+      eur, usd,
+      change24h: coin.change24h,
+      image:     coin.image || existing?.image || '',
+      sparkline: coin.sparkline.length ? coin.sparkline : (existing?.sparkline||[]),
+    };
+  });
+  if(rateCount>0) window._cryptoEurUsdRate = rateSum/rateCount;
+}
+
 async function fetchCryptoPrices(){
   const tickers = cryptoState.positions.map(p=>p.ticker).join(',');
   if(!tickers){ window._cryptoLoaded = true; return; }
   const ts = document.getElementById('crypto-last-update');
   if(ts) ts.textContent = 'Chargement...';
+
+  // ── Cache localStorage (5 min) ───────────────────────────────
+  const CG_CACHE_KEY = 'kyf-cg-price-cache';
+  const CG_CACHE_TTL = 5 * 60 * 1000;
   try{
-    // Récupérer EUR et USD en même temps
-    const [rEur, rUsd] = await Promise.all([
-      fetch(coingeckoUrl('coins/markets?ids='+tickers+'&vs_currency=eur&price_change_percentage=24h&sparkline=true'), {cache:'no-store'}),
-      fetch(coingeckoUrl('coins/markets?ids='+tickers+'&vs_currency=usd&price_change_percentage=24h&sparkline=false'), {cache:'no-store'})
-    ]);
-    if(!rEur.ok) throw new Error('CoinGecko EUR '+rEur.status);
-    const dEur = await rEur.json();
-    const dUsd = rUsd.ok ? await rUsd.json() : [];
-    // Map USD par id
-    const usdMap = {};
-    dUsd.forEach(c => { usdMap[c.id] = c.current_price || 0; });
-    let _rateSum = 0, _rateCount = 0;
-    dEur.forEach(coin=>{
-      const eur = coin.current_price || 0;
-      const usd = usdMap[coin.id] || 0;
-      if(eur > 0 && usd > 0){ _rateSum += usd/eur; _rateCount++; }
-      cryptoPrices[coin.id] = {
-        eur,
-        usd,
-        change24h: coin.price_change_percentage_24h || 0,
-        image:     coin.image || '',
-        sparkline: coin.sparkline_in_7d?.price || [],
-      };
-    });
-    // Taux EUR→USD moyen calculé depuis les prix CoinGecko
-    if(_rateCount > 0) window._cryptoEurUsdRate = _rateSum / _rateCount;
-    if(ts) ts.textContent = 'MAJ '+new Date().toLocaleTimeString('fr-FR');
-  } catch(e){
-    if(ts) ts.textContent = 'Prix indisponibles';
+    const cached = JSON.parse(localStorage.getItem(CG_CACHE_KEY)||'{}');
+    if(cached._ts && Date.now()-cached._ts < CG_CACHE_TTL && cached.data){
+      _applyPriceResults(Object.values(cached.data));
+      if(cached._rate) window._cryptoEurUsdRate = cached._rate;
+      if(ts) ts.textContent = '⚡ Cache '+new Date(cached._ts).toLocaleTimeString('fr-FR');
+      renderCryptoAll(); window._cryptoLoaded = true; tryDailySnapshot();
+      if(Date.now()-cached._ts < 2*60*1000) return; // < 2min → pas de refresh
+    }
+  }catch(e){}
+
+  // ── Cascade de fallbacks ──────────────────────────────────────
+  const SOURCES = [
+    { name:'CoinGecko',   fn: ()=>_fetchFromCoinGecko(tickers) },
+    { name:'CoinPaprika', fn: ()=>_fetchFromCoinPaprika(tickers) },
+    { name:'Binance',     fn: ()=>_fetchFromBinance(tickers) },
+  ];
+
+  let success = false;
+  for(const source of SOURCES){
+    try{
+      if(ts) ts.textContent = source.name+'...';
+      const data = await source.fn();
+      if(data && data.length > 0){
+        _applyPriceResults(data);
+        // Sauvegarder en cache
+        try{ localStorage.setItem(CG_CACHE_KEY, JSON.stringify({_ts:Date.now(), data:{...cryptoPrices}, _rate:window._cryptoEurUsdRate})); }catch(e){}
+        if(ts) ts.textContent = (source.name==='CoinGecko'?'':'⚡'+source.name+' ') + 'MAJ '+new Date().toLocaleTimeString('fr-FR');
+        console.log('[KYF Crypto] Prix chargés via', source.name);
+        success = true;
+        break;
+      }
+    }catch(e){
+      console.warn('[KYF Crypto] '+source.name+' échec:', e.message);
+    }
+  }
+  if(!success){
+    // Fallback cache expiré
+    try{
+      const cached = JSON.parse(localStorage.getItem(CG_CACHE_KEY)||'{}');
+      if(cached.data){ _applyPriceResults(Object.values(cached.data)); if(ts) ts.textContent = '⚠️ Cache expiré'; }
+      else if(ts) ts.textContent = '❌ Prix indisponibles';
+    }catch(e){ if(ts) ts.textContent = '❌ Prix indisponibles'; }
   }
   renderCryptoAll();
   window._cryptoLoaded = true;
