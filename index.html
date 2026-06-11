@@ -7938,10 +7938,10 @@ function renderETFTable(lp){
       ${showCol('gpp')?`<td class="${gain>=0?'up':'dn'}">${invest>0&&!isNaN(gainPct)?(gain>=0?'+':'')+(gainPct*100).toFixed(2)+' %':'—'}</td>`:''}
       ${showCol('repartition')?`<td style="color:var(--text2)">${repartition>0?(repartition*100).toFixed(2)+'%':''}</td>`:''}
       <td style="white-space:nowrap;padding:4px 6px">
-        <button onclick="openEditETF(${ETF.indexOf(e)})" title="Modifier"
+        <button onclick="openEditETF(${i})" title="Modifier"
           style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;padding:2px 4px;border-radius:4px;transition:color .15s"
           onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text3)'">✏️</button>
-        <button onclick="deleteETF(${ETF.indexOf(e)})" title="Supprimer"
+        <button onclick="deleteETF(${i})" title="Supprimer"
           style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:12px;padding:2px 4px;border-radius:4px;transition:color .15s"
           onmouseover="this.style.color='#ff4560'" onmouseout="this.style.color='var(--text3)'">🗑</button>
       </td>
@@ -10086,32 +10086,69 @@ async function fetchCoinGeckoIntraday(cryptoPositions) {
   const results = {}; // { cgId: { t: price } }
   if (!cryptoPositions || cryptoPositions.length === 0) return results;
 
-  // Dédupliquer les cgIds
+  // ── Utiliser le sparkline 7j déjà chargé dans cryptoPrices (0 appel supplémentaire) ──
   const cgIds = [...new Set(cryptoPositions.map(p => p.cgId || p.ticker || p.id).filter(Boolean))];
 
-  await Promise.allSettled(cgIds.map(async cgId => {
-    try {
-      const url = `https://api.coingecko.com/api/v3/coins/${cgId}/market_chart?vs_currency=eur&days=1&precision=4`;
-      const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
-      if (!r.ok) return;
-      const data = await r.json();
-      const prices = data?.prices || []; // [[timestamp_ms, price], ...]
+  cgIds.forEach(cgId => {
+    const cp = cryptoPrices[cgId];
+    const spark = cp?.sparkline || [];
+    if (spark.length === 0) return;
 
-      // Rééchantillonner à 30min : prendre le dernier point de chaque slot
-      const slotMap = {};
-      prices.forEach(([tms, price]) => {
-        const d = new Date(tms);
-        const paris = new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-        const h = paris.getHours();
-        const m = Math.floor(paris.getMinutes() / 30) * 30;
-        const slot = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
-        slotMap[slot] = Math.round(price * 10000) / 10000; // dernier point du slot gagne
-      });
-      results[cgId] = slotMap;
+    // Le sparkline 7j contient ~168 points (1/heure sur 7 jours)
+    // On prend les dernières 24h = ~24 points et on les répartit en slots 30min
+    const last24 = spark.slice(-24);
+    const slotMap = {};
+    const now = Date.now();
+    const msPerPoint = 3600000; // 1h entre chaque point sparkline
+
+    last24.forEach((price, i) => {
+      if (price == null) return;
+      const tms = now - (last24.length - 1 - i) * msPerPoint;
+      const d = new Date(tms);
+      const paris = new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+      const h = paris.getHours();
+      const m = Math.floor(paris.getMinutes() / 30) * 30;
+      const slot = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+      slotMap[slot] = Math.round(price * 10000) / 10000;
+    });
+
+    if (Object.keys(slotMap).length > 0) results[cgId] = slotMap;
+  });
+
+  // Si pas de sparkline disponible pour certains coins → fallback 1 appel bulk
+  const missing = cgIds.filter(id => !results[id]);
+  if (missing.length > 0) {
+    try {
+      const url = coingeckoUrl('coins/markets?ids=' + missing.join(',') + '&vs_currency=eur&sparkline=true');
+      const r = await fetch(url, { signal: AbortSignal.timeout(12000), cache:'no-store' });
+      if (r.ok) {
+        const data = await r.json();
+        if (Array.isArray(data)) {
+          data.forEach(coin => {
+            const spark = coin.sparkline_in_7d?.price || [];
+            const last24 = spark.slice(-24);
+            const slotMap = {};
+            const now = Date.now();
+            last24.forEach((price, i) => {
+              if (price == null) return;
+              const tms = now - (last24.length - 1 - i) * 3600000;
+              const d = new Date(tms);
+              const paris = new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+              const h = paris.getHours();
+              const m = Math.floor(paris.getMinutes() / 30) * 30;
+              const slot = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+              slotMap[slot] = Math.round(price * 10000) / 10000;
+            });
+            if (Object.keys(slotMap).length > 0) results[coin.id] = slotMap;
+          });
+        }
+      }
     } catch(e) {
-      console.warn('[KYF Intraday] CoinGecko fetch error:', cgId, e.message);
+      console.warn('[KYF Intraday] Fallback bulk erreur:', e.message);
     }
-  }));
+  }
+
+  console.log('[KYF Intraday] Crypto — sparkline réutilisé pour', Object.keys(results).length, '/', cgIds.length, 'coins (0 appels supplémentaires)');
   return results;
 }
 
@@ -14657,7 +14694,9 @@ function confirmAddCryptoPosition(){
       }
     }
   } catch(e){}
-  fetchCryptoPrices();
+  // Vider les données obsolètes avant rechargement
+  Object.keys(cryptoPrices).forEach(k => delete cryptoPrices[k]);
+  fetchCryptoPrices().then(()=>renderCryptoAll());
 }
 
 function renderCryptoAll(){
